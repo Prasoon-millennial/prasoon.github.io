@@ -1,7 +1,7 @@
 ---
 title: "Structure-based Drug Design with Equivariant Diffusion Models"
-date: 2025-07-31
-permalink: /posts/2025/07/diffsbdd/
+date: 2026-02-16
+permalink: /posts/2026/02/transsolver/
 tags:
   - deep-learning
   - drug-discovery
