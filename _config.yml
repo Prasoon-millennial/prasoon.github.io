@@ -9,13 +9,13 @@
 # Basic Site Settings
 locale                   : "en-US"
 site_theme               : "default"
-title                    : "Structure-based drug design with equivariant diffusion models"
+title                    : "Trans Solver"
 title_separator          : "-"
-name                     : &name "Yamandeep Yamandeep"
+name                     : &name "Prasoon Tiwari"
 description              : # &description "personal description"
 url: "https://yaman3397.github.io"
 baseurl: "/yamandeep.github.io"  # project name after the slash
-repository: "yaman3397/yamandeep.github.io"
+repository: "Prasoon-millennial/prasoon.github.io"
 
 # Site Author - The following control what appear as part of the author content on the side bar.
 #               If a field is blank the icon and link will not appear, otherwise it will be shown.
@@ -23,7 +23,7 @@ repository: "yaman3397/yamandeep.github.io"
 author:
   # Biographic information
   avatar           : "profile.png"
-  name             : "Yamandeep Yamandeep"
+  name             : "Prasoon Tiwari"
   bio              : "M.Sc. Computer Science"
   location         : "Stuttgart, Germany"
   employer         : "University of Stuttgart"
@@ -43,7 +43,7 @@ author:
   bitbucket        : # Username - Update with your username on the site
   codepen          : # Username
   dribbble         : # Username
-  github           : "yaman3397"
+  github           : "Prasoon-millennial"
   kaggle           : # Username  
   stackoverflow    : # User number or user number and name (i.e., use "1" or "1/jeff-atwood")    
 
