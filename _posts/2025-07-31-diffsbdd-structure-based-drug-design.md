@@ -1,18 +1,17 @@
 ---
-title: "Structure-based Drug Design with Equivariant Diffusion Models"
+title: "Transolver: A Fast Transformer Solver for PDEs on General Geometries"
 date: 2026-02-16
 permalink: /posts/2026/02/transsolver/
 tags:
   - deep-learning
-  - drug-discovery
-  - diffusion-models
-  - equivariant
-  - molecular-design
-  - SBDD
+  - scientific-machine-learning
+  - neural-operators
+  - transformers
+  - PDE
+  - operator-learning
 math: true
 ---
 
-# Structure-based Drug Design with Equivariant Diffusion Models: Unifying Physical Consistency with Molecular Innovation
 
 ## Abstract
 
@@ -152,30 +151,41 @@ $$
 
 Transolver instead introduces an intermediate abstraction layer.
 
-### 2. Learning Physics-Aware Slices
+### Physics-Attention Mechanism
 
-The central idea is that mesh points are not fundamental physical entities — they are samples of a continuous physical field. Many spatially distant points may share similar physical behavior (e.g., similar stress or flow characteristics).
+The key innovation of Transolver is replacing point-level self-attention with **Physics-Attention**, a mechanism that operates over learned latent physical states rather than raw mesh points<a href="#ref-1">[1]</a>.
 
-Transolver introduces $M$ learnable slices, where:
+Mesh points are not fundamental physical entities — they are discretized samples of a continuous field. Many spatially distant points may exhibit similar physical behavior (e.g., comparable stress magnitude or flow characteristics). Instead of attending over all $N$ mesh points directly, Transolver introduces $M$ learnable **slices**, where:
 
 $$
 M \ll N
 $$
 
-Each mesh point feature $x_i \in \mathbb{R}^{C}$ is softly assigned to slices using learned weights:
+These slices serve as compact representations of intrinsic physical states.
+
+---
+
+#### 1. Slice Assignment
+
+Each mesh feature $x_i \in \mathbb{R}^{C}$ is softly assigned to slices through a learnable projection:
 
 $$
-w_i = \text{Softmax}(\text{Project}(x_i))
+w_i = \text{Softmax}(W_s x_i)
 $$
 
 where:
 
-- $w_i \in \mathbb{R}^{M}$
-- $\sum_{j=1}^{M} w_{i,j} = 1$
+- $w_i \in \mathbb{R}^{M}$  
+- $\sum_{j=1}^{M} w_{i,j} = 1$  
+- $W_s$ is a learnable weight matrix  
 
-These weights determine how strongly a mesh point belongs to each slice.
+The softmax ensures each mesh point contributes proportionally to multiple slices rather than being hard-clustered.
 
-The slice representation is then computed as a weighted aggregation:
+---
+
+#### 2. Slice Token Construction
+
+Slice tokens are formed through weighted aggregation:
 
 $$
 z_j =
@@ -183,19 +193,24 @@ z_j =
 {\sum_{i=1}^{N} w_{i,j}}
 $$
 
-Each $z_j$ becomes a physics-aware token, representing an intrinsic physical state.
+Each $z_j$ becomes a **physics-aware token**, summarizing a coherent physical pattern across the domain.
 
-This design has two important consequences:
+This transformation yields two critical benefits:
 
-- Spatially distant but physically similar points can belong to the same slice.
-- The number of tokens reduces from $N$ mesh points to $M$ slice tokens.
+- Spatially distant but physically similar points can belong to the same slice.  
+- The token count reduces from $N$ mesh points to $M$ slice tokens.  
 
-### 3. Physics-Attention on Slice Tokens
+---
 
-Instead of computing attention among all mesh points, Transolver computes attention among the $M$ slice tokens:
+#### 3. Attention in Slice Space
+
+Self-attention is then computed over slice tokens instead of mesh points:
 
 $$
-Z' = \text{Softmax}\left(\frac{QK^T}{\sqrt{C}}\right)V
+Z' =
+\text{Softmax}\left(
+\frac{QK^T}{\sqrt{C}}
+\right)V
 $$
 
 where:
@@ -210,29 +225,36 @@ $$
 O(NMC + M^2C)
 $$
 
-Since $M$ is fixed and much smaller than $N$, this scales linearly with respect to mesh size:
+Since $M$ is fixed and much smaller than $N$, overall scaling simplifies to:
 
 $$
-\text{Overall complexity} = O(N)
+O(N)
 $$
 
-This directly resolves the quadratic bottleneck of standard self-attention<a href="#ref-1">[1]</a>.
+This eliminates the quadratic bottleneck of standard self-attention<a href="#ref-1">[1]</a>.
 
-### 4. Deslicing: Broadcasting Back to the Mesh
+---
 
-After attention is computed among slice tokens, the updated physical states must be mapped back to mesh points.
+#### 4. Deslicing (Projection Back to Mesh)
 
-This is done using the same slice weights:
+After slice-level interactions are computed, updated physical states are broadcast back to mesh points using the same assignment weights:
 
 $$
-x_i' = \sum_{j=1}^{M} w_{i,j} z_j'
+x_i' =
+\sum_{j=1}^{M}
+w_{i,j} z_j'
 $$
 
-Thus, each mesh point receives information from the globally updated physical states.
+Each mesh point therefore receives information from globally updated physical states.
 
 This completes one Physics-Attention layer.
 
-### 5. Theoretical Interpretation
+---
+
+By operating in a compressed latent physical space rather than directly on discretization artifacts, Physics-Attention achieves linear scalability while preserving global physical correlations.
+
+
+### 3. Theoretical Interpretation
 
 The authors show that Physics-Attention can be interpreted as a learnable integral operator over the physical domain<a href="#ref-1">[1]</a>.
 
@@ -248,7 +270,7 @@ $$
 
 Physics-Attention approximates this operator in a compressed latent physical space, preserving operator-learning foundations while improving scalability.
 
-### 6. Full Layer Structure
+### 4. Full Layer Structure
 
 Transolver retains the standard Transformer block structure:
 
