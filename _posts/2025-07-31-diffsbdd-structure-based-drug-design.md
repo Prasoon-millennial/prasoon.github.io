@@ -16,11 +16,15 @@ math: true
 
 ## Abstract
 
-Structure-based drug design (SBDD) aims to craft small molecules that fit a protein’s binding pocket with high affinity and specificity. Traditional workflows screen vast libraries of known compounds, which limits exploration of new chemistries and novel scaffolds. DiffSBDD overcomes these barriers by employing an SE(3)-equivariant diffusion model that generates 3D ligand candidates directly in the context of a fixed protein pocket<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a>. Treating proteins and ligands as point-cloud inputs and enforcing rotational and translational symmetries, a single pretrained network can perform de novo molecule creation, property optimization, or fragment completion simply by altering its sampling process. In benchmark simulations, DiffSBDD not only reproduces natural binding geometries but also yields improved drug-likeness scores (e.g., docking affinity, synthetic accessibility) compared to baseline methods<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a><a href="#ref-4" title="Lu et al. (2021) Pocket2Mol">[4]</a><a href="#ref-6" title="Zhavoronkov et al. (2019) DDR1 Kinase Inhibitors">[6]</a>. These findings highlight the promise of equivariant diffusion models for more flexible, efficient, and accurate drug discovery.
+Partial Differential Equations (PDEs) form the mathematical foundation of scientific computing, governing applications in fluid dynamics, structural mechanics, elasticity, and aerodynamics. While traditional numerical solvers such as finite element and finite volume methods provide high accuracy, they are computationally expensive and scale poorly for high-resolution or irregular geometries. Neural operator approaches—including the Fourier Neural Operator (FNO)<a href="#ref-2" title="Li et al. (2021) Fourier Neural Operator">[2]</a>, Graph Neural Operators (GNO)<a href="#ref-3" title="Li et al. (2020) Neural Operator: Graph Kernel Network">[3]</a>, and Transformer-based neural operators such as GNOT<a href="#ref-5" title="Hao et al. (2023) GNOT">[5]</a>—have emerged as promising surrogate models for learning mappings between geometry and physical fields. However, standard Transformer architectures suffer from quadratic attention complexity 𝑂(𝑁^2) making them impractical for large-scale unstructured meshes.
+
+Transolver addresses this limitation through a novel Physics-Attention mechanism that replaces point-level attention with learned physics-aware “slices”<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>. Instead of computing attention across all mesh points, Transolver adaptively aggregates discretized mesh points into intrinsic physical states, performs attention over compact slice tokens, and projects the learned interactions back to the full mesh. This design reduces computational complexity from quadratic to linear time 𝑂(𝑁) while preserving global physical correlations<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>. The resulting architecture can be interpreted as a learnable integral operator, connecting Transformer attention mechanisms with operator learning theory<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a><a href="#ref-4" title="Cao (2021) Fourier or Galerkin Transformer">[4]</a>.
+
+Across multiple PDE benchmarks—including Elasticity, Plasticity, Navier–Stokes, Darcy flow, Airfoil, and Pipe—Transolver achieves consistent state-of-the-art performance, reporting significant relative error reduction compared to prior neural operator baselines<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a><a href="#ref-2" title="Li et al. (2021) Fourier Neural Operator">[2]</a>. Moreover, it demonstrates strong scalability and generalization on industrial-scale simulations such as AirfRANS airfoil design<a href="#ref-6" title="Bonnet et al. (2022) AirfRANS Dataset">[6]</a> and Shape-Net Car aerodynamics, including robust out-of-distribution performance on unseen geometries<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>. By shifting attention from discretization artifacts to intrinsic physical structures, Transolver provides a scalable and geometry-general Transformer framework for scientific computing and real-time engineering simulation.
 
 ## Table of Contents
 
-- [Introduction and Motivation](#introduction-and-motivation)  
+- [Introduction and Motivation](#introduction-and-motivation) 
 - [Background: From Screening to AI-Driven Design](#background-from-screening-to-ai-driven-design)  
 - [The DiffSBDD Approach – Technical Deep Dive](#the-diffsbbd-approach)
 - [Revolutionary Applications](#revolutionary-applications)  
@@ -394,17 +398,13 @@ DiffSBDD represents a significant advance in computational drug design by combin
 <a id="ref-4"></a>
 <a id="ref-5"></a>
 <a id="ref-6"></a>
-<a id="ref-7"></a>
-<a id="ref-8"></a>
 ## References
 
-1. Hoogeboom, E., Loukas, A., & Welling, M. (2024). Structure-based drug design with equivariant diffusion models. *Nature Machine Intelligence*, 6, 687–697. https://doi.org/10.1038/s43588-024-00737-x  
-2. Satorras, V. G., Hoogeboom, E., Fuchs, F. B., & Welling, M. (2021). E(n) Equivariant Graph Neural Networks. *arXiv preprint arXiv:2102.09844*. https://arxiv.org/abs/2102.09844  
-3. Xu, M., Wang, Y., Hu, W., & Leskovec, J. (2021). GeoDiff: A Geometric Diffusion Model for Molecular Conformation Generation. *ICLR 2022*. https://arxiv.org/abs/2203.02923  
-4. Lu, C., Wu, H., Shen, R., & Cao, Y. (2021). Pocket2Mol: Efficient Molecular Generation Based on Binding Pockets. *NeurIPS 2021*. https://arxiv.org/abs/2110.07875  
-5. Ganea, O.-E., Huang, J., Bunne, C., & Krause, A. (2021). Independent SE(3)-Equivariant Models for End-to-End Rigid Protein Docking. *arXiv preprint arXiv:2111.07786*. https://arxiv.org/abs/2111.07786  
-6. Zhavoronkov, A., Ivanenkov, Y. A., Aliper, A., et al. (2019). Deep learning enables rapid identification of potent DDR1 kinase inhibitors. *Nature Biotechnology*, 37(9), 1038–1040. https://doi.org/10.1038/s41587-019-0224-x  
-7. Berman, H. M., et al. (2000). The Protein Data Bank. *Nucleic Acids Research*, 28(1), 235–242. https://doi.org/10.1093/nar/28.1.235  
-8. Huuskonen, J. (2000). Estimation of Aqueous Solubility for a Diverse Set of Organic Compounds Based on Molecular Topology. *Journal of Chemical Information and Computer Sciences*, 40(3), 773–777. https://doi.org/10.1021/ci990307l  
+1. Wu, H., Luo, H., Wang, H., Wang, J., & Long, M. (2024). Transolver: A Fast Transformer Solver for PDEs on General Geometries. arXiv preprint arXiv:2402.02366. https://arxiv.org/abs/2402.02366
+2. Li, Z., Kovachki, N., Azizzadenesheli, K., Liu, B., Bhattacharya, K., Stuart, A., & Anandkumar, A. (2021). Fourier Neural Operator for Parametric Partial Differential Equations. ICLR 2021. https://arxiv.org/abs/2010.08895
+3. Li, Z., Kovachki, N., Azizzadenesheli, K., Liu, B., Bhattacharya, K., Stuart, A., & Anandkumar, A. (2020). Neural Operator: Graph Kernel Network for Partial Differential Equations. arXiv preprint arXiv:2003.03485. https://arxiv.org/abs/2003.03485 
+4. Cao, S. (2021). Choose a Transformer: Fourier or Galerkin. NeurIPS 2021. https://arxiv.org/abs/2105.14995
+5. Hao, Z., Ying, C., Wang, Z., Su, H., Dong, Y., Liu, S., Cheng, Z., Zhu, J., & Song, J. (2023). GNOT: A General Neural Operator Transformer for Operator Learning. ICML 2023. 
+6. Bonnet, F., Mazari, J.-A., Cinnella, P., & Gallinari, P. (2022). AirfRANS: High Fidelity Computational Fluid Dynamics Dataset for Approximating Reynolds-Averaged Navier–Stokes Solutions. NeurIPS Datasets and Benchmarks 2022. 
 
 
