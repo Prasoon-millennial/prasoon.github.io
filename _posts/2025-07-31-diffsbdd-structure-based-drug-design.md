@@ -152,6 +152,126 @@ $$
 
 Transolver instead introduces an intermediate abstraction layer.
 
+### 2. Learning Physics-Aware Slices
+
+The central idea is that mesh points are not fundamental physical entities — they are samples of a continuous physical field. Many spatially distant points may share similar physical behavior (e.g., similar stress or flow characteristics).
+
+Transolver introduces $M$ learnable slices, where:
+
+$$
+M \ll N
+$$
+
+Each mesh point feature $x_i \in \mathbb{R}^{C}$ is softly assigned to slices using learned weights:
+
+$$
+w_i = \text{Softmax}(\text{Project}(x_i))
+$$
+
+where:
+
+- $w_i \in \mathbb{R}^{M}$
+- $\sum_{j=1}^{M} w_{i,j} = 1$
+
+These weights determine how strongly a mesh point belongs to each slice.
+
+The slice representation is then computed as a weighted aggregation:
+
+$$
+z_j =
+\frac{\sum_{i=1}^{N} w_{i,j} x_i}
+{\sum_{i=1}^{N} w_{i,j}}
+$$
+
+Each $z_j$ becomes a physics-aware token, representing an intrinsic physical state.
+
+This design has two important consequences:
+
+- Spatially distant but physically similar points can belong to the same slice.
+- The number of tokens reduces from $N$ mesh points to $M$ slice tokens.
+
+### 3. Physics-Attention on Slice Tokens
+
+Instead of computing attention among all mesh points, Transolver computes attention among the $M$ slice tokens:
+
+$$
+Z' = \text{Softmax}\left(\frac{QK^T}{\sqrt{C}}\right)V
+$$
+
+where:
+
+$$
+Q, K, V \in \mathbb{R}^{M \times C}
+$$
+
+The computational complexity becomes:
+
+$$
+O(NMC + M^2C)
+$$
+
+Since $M$ is fixed and much smaller than $N$, this scales linearly with respect to mesh size:
+
+$$
+\text{Overall complexity} = O(N)
+$$
+
+This directly resolves the quadratic bottleneck of standard self-attention<a href="#ref-1">[1]</a>.
+
+### 4. Deslicing: Broadcasting Back to the Mesh
+
+After attention is computed among slice tokens, the updated physical states must be mapped back to mesh points.
+
+This is done using the same slice weights:
+
+$$
+x_i' = \sum_{j=1}^{M} w_{i,j} z_j'
+$$
+
+Thus, each mesh point receives information from the globally updated physical states.
+
+This completes one Physics-Attention layer.
+
+### 5. Theoretical Interpretation
+
+The authors show that Physics-Attention can be interpreted as a learnable integral operator over the physical domain<a href="#ref-1">[1]</a>.
+
+While classical attention approximates an integral operator directly over mesh points<a href="#ref-4">[4]</a>, Transolver performs this approximation over a transformed slice domain.
+
+Conceptually, an operator mapping can be written as:
+
+$$
+G(u)(g^*) =
+\int_{\Omega}
+\kappa(g^*, \xi)\, u(\xi)\, d\xi
+$$
+
+Physics-Attention approximates this operator in a compressed latent physical space, preserving operator-learning foundations while improving scalability.
+
+### 6. Full Layer Structure
+
+Transolver retains the standard Transformer block structure:
+
+$$
+\hat{x}_l =
+\text{Physics-Attn}(\text{LayerNorm}(x_{l-1}))
++ x_{l-1}
+$$
+
+$$
+x_l =
+\text{FeedForward}(\text{LayerNorm}(\hat{x}_l))
++ \hat{x}_l
+$$
+
+The only modification is replacing canonical self-attention with Physics-Attention.
+
+This seemingly small architectural change produces:
+
+- Linear complexity  
+- Geometry generality  
+- Strong empirical performance across structured and unstructured meshes<a href="#ref-1">[1]</a>
+
 
 
 
