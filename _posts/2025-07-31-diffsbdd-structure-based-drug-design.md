@@ -56,7 +56,7 @@ Standard Transformers compute attention across all pairs of input points, leadin
 This is precisely the gap that Transolver seeks to address<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>.
 
 <p align="center">
-  <img src="{{ site.baseurl }}/images/1.png" width="85%">
+  <img src="/prasoon.github.io/images/1.png" width="85%">
 </p>
 
 <p align="center"><em>Figure 1: Visualization of learned physics-aware slices across different geometries (Darcy, Elasticity, Airfoil, and Car tasks). Brighter colors indicate stronger slice assignments. (Source: Wu et al., 2024)</em></p>
@@ -131,7 +131,7 @@ Mesh → Physics - Aware Slices → Token Attention → Mesh
 $$
 
 <p align="center">
-  <img src="{{ site.baseurl }}/images/2.png" width="85%">
+  <img src="/prasoon.github.io/images/2.png" width="85%">
 </p>
 
 <p align="center"><em>Figure 2: Conceptual illustration of mapping from discretized mesh space to physics-aware slice space. (Source: Wu et al., 2024)</em></p>
@@ -315,7 +315,7 @@ This seemingly small architectural change produces:
 ## Architecture Overview
 
 <p align="center">
-  <img src="{{ site.baseurl }}/images/3.png" width="85%">
+  <img src="/prasoon.github.io/images/3.png" width="85%">
 </p>
 
 <p align="center"><em>Figure 3: Architecture of Transolver with stacked Physics-Attention layers replacing standard self-attention. (Source: Wu et al., 2024)</em></p>
@@ -483,7 +483,7 @@ These datasets include structured grids, point clouds, and irregular meshes, tes
 Across these tasks, Transolver achieves consistent state-of-the-art performance, reporting up to **22% relative error reduction** compared to prior neural operators<a href="#ref-1">[1]</a>.
 
 <p align="center">
-  <img src="{{ site.baseurl }}/images/t2.png" width="85%">
+  <img src="/prasoon.github.io/images/t2.png" width="85%">
 </p>
 
 <p align="center"><em>Table 2: Relative L2 error comparison across six PDE benchmarks. Transolver achieves the best performance in most settings. (Source: Wu et al., 2024)</em></p>
@@ -502,7 +502,7 @@ Notably:
 Beyond synthetic benchmarks, Transolver is tested on large-scale industrial datasets.
 
 <p align="center">
-  <img src="{{ site.baseurl }}/images/4.png" width="85%">
+  <img src="/prasoon.github.io/images/4.png" width="85%">
 </p>
 
 <p align="center"><em>Figure 4: Industrial aerodynamic simulation setups including 3D car surface prediction and airfoil design tasks. (Source: Wu et al., 2024)</em></p>
@@ -532,7 +532,7 @@ Tasks include:
 - Computing derived quantities such as lift and drag
 
 <p align="center">
-  <img src="{{ site.baseurl }}/images/t3.png" width="85%">
+  <img src="/prasoon.github.io/images/t3.png" width="85%">
 </p>
 
 <p align="center"><em>Table 3: Performance comparison on Shape-Net Car and AirfRANS datasets, including surface error and aerodynamic metrics. (Source: Wu et al., 2024)</em></p>
