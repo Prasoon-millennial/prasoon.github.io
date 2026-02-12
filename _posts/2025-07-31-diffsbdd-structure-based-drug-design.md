@@ -477,7 +477,7 @@ Notably:
 
 Beyond synthetic benchmarks, Transolver is tested on large-scale industrial datasets.
 
-#### Shape-Net Car (3D Aerodynamics)
+### Shape-Net Car (3D Aerodynamics)
 
 This dataset involves predicting surface pressure and surrounding velocity fields for complex 3D car geometries with approximately 32,000 mesh points<a href="#ref-1">[1]</a>.
 
@@ -491,7 +491,7 @@ The model demonstrates robustness to highly irregular 3D meshes.
 
 ---
 
-#### AirfRANS (Airfoil Design)
+### AirfRANS (Airfoil Design)
 
 Transolver is evaluated on the AirfRANS dataset<a href="#ref-6">[6]</a>, which approximates Reynolds-Averaged Navier–Stokes (RANS) simulations.
 
@@ -527,7 +527,7 @@ Unlike some baseline models, predictions do not degrade significantly at higher 
 
 Across both benchmark and industrial datasets, Transolver demonstrates:
 
-- Consistent reduction in Relative $L_2$ error  
+- Consistent reduction in Relative L2 error  
 - Strong generalization across geometries  
 - Stable performance under mesh refinement  
 - Practical scalability for large domains  
@@ -563,15 +563,15 @@ $$
 \right)V
 $$
 
-This requires storing and processing an $N \times N$ attention matrix.
+This requires storing and processing an N x N attention matrix.
 
-In contrast, Transolver introduces $M$ slice tokens with $M \ll N$. The complexity of Physics-Attention becomes:
+In contrast, Transolver introduces M slice tokens. The complexity of Physics-Attention becomes:
 
 $$
 O(NMC + M^2C)
 $$
 
-Since $M$ is fixed and much smaller than $N$, this simplifies to:
+Since M is fixed and much smaller than N, this simplifies to:
 
 $$
 O(N)
@@ -609,7 +609,7 @@ An important experiment evaluates performance under increasing mesh resolution.
 
 Key findings:
 
-- Relative $L_2$ error remains stable as mesh density increases.  
+- Relative L2 error remains stable as mesh density increases.  
 - Runtime grows approximately linearly.  
 - GPU memory usage scales significantly more efficiently than quadratic attention baselines.  
 
