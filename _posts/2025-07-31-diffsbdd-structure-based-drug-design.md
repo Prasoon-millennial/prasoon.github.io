@@ -45,7 +45,7 @@ Traditionally, PDEs are solved using numerical methods such as the Finite Elemen
 In recent years, machine learning has emerged as a promising alternative through the concept of neural operators. Instead of solving PDEs from scratch for every new configuration, neural operators aim to learn the mapping:
 
 $$
-(Geometry,Boundary Conditions) → Solution Field
+(Geometry, Boundary Conditions) → Solution Field
 $$
 
 Once trained, such models can act as surrogate solvers, producing near-instant predictions. Approaches such as the Fourier Neural Operator (FNO)<a href="#ref-2" title="Li et al. (2021) Fourier Neural Operator">[2]</a> and Graph Neural Operator (GNO)<a href="#ref-3" title="Li et al. (2020) Graph Neural Operator">[3]</a> have demonstrated strong performance across several benchmark PDE tasks. Transformer-based operator models, including Galerkin Transformers<a href="#ref-4" title="Cao (2021) Fourier or Galerkin Transformer">[4]</a> and GNOT<a href="#ref-5" title="Hao et al. (2023) GNOT">[5]</a>, further extended this idea by modeling long-range interactions via attention mechanisms.
@@ -56,9 +56,7 @@ Standard Transformers compute attention across all pairs of input points, leadin
 
 This is precisely the gap that Transolver seeks to address<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>.
 
-The key motivation behind Transolver is a conceptual shift:
-
-Instead of attending over mesh points, attend over physical structures.
+The key motivation behind Transolver is a conceptual shift: Instead of attending over mesh points, attend over physical structures.
 
 By introducing a Physics-Attention mechanism built around learned “slices,” Transolver replaces point-level attention with interactions between compact, physics-aware tokens. This reduces computational complexity from quadratic to linear time 𝑂(𝑁) while preserving the ability to model global physical correlations<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>. Importantly, this design allows the model to scale to large unstructured meshes without sacrificing accuracy.
 
@@ -66,21 +64,55 @@ The broader motivation is clear: enabling real-time, geometry-general PDE solvin
 
 In the following sections, we examine how neural operators evolved, why standard attention mechanisms struggle with physical domains, and how Transolver’s slice-based Physics-Attention framework overcomes these limitations.
 
-## Background: From Screening to AI-Driven Design
+## Background: Neural Operators and Transformer Limitations
 
-Drug discovery has always involved a bit of guesswork. For years, scientists have relied on virtual screening to evaluate large molecular libraries comprising thousands to millions of candidates, in search of compounds with favorable binding affinity to target proteins. This method works, but only within the limits of what’s already in our molecular libraries. That’s a problem, because most of chemical space remains unexplored.
+The idea of replacing traditional numerical solvers with learned models gained significant traction with the introduction of neural operators. Unlike classical neural networks that approximate mappings between finite-dimensional vectors, neural operators aim to learn mappings between functions. In the PDE setting, this means learning an operator of the form:
 
-Another route, fragment-based design, tries to take small pieces that bind weakly and stitch them together into something stronger. In theory, this expands the possibilities. But in practice, enumerating valid chemical combinations quickly becomes combinatorially intractable, often producing candidates with poor physicochemical stability or synthetic accessibility<a href="#ref-8" title="Huuskonen (2000) Solubility Estimation via Topology">[8]</a>.
+$$
+G : (u,g) → v
+$$
 
-With the rise of deep learning, things started to change. Instead of searching through what we already have, machine learning promised something more ambitious: generating molecules from scratch. Initial generative models relied on 1D string representations (e.g., SMILES) or 2D molecular graphs. These were easy to work with, but they left out something important—how molecules actually exist in space. For instance, SMILES-based models fail to encode stereochemistry, torsional constraints, or 3D conformation, which can result in up to 30% error in downstream binding affinity tasks.
+where 
+g represents the discretized geometry or spatial coordinates, 
+u denotes input conditions (e.g., boundary or initial states), and 
+v is the resulting physical field.
 
-That missing piece—geometry—isn’t just a detail. It shapes how drugs interact with proteins, how tightly they bind, and how specific they are. Minor perturbations in 3D geometry can drastically alter bioactivity or off-target interactions. That’s why ignoring geometry can lead models to produce molecules that look promising but fail when tested in real-world conditions.
+Fourier Neural Operator (FNO)
 
-To overcome this, researchers began building models that take spatial structure seriously. Some of the most promising are equivariant neural networks<a href="#ref-2" title="Satorras et al. (2021) E(n) Equivariant Graph Neural Networks">[2]</a>. These models are built to respect how 3D molecules behave—they know that if you rotate or shift a molecule, it’s still the same molecule. That might sound like a small thing, but it's critical for accurate predictions.
+One of the earliest and most influential approaches was the Fourier Neural Operator (FNO)<a href="#ref-2" title="Li et al. (2021) Fourier Neural Operator">[2]</a>. FNO performs global convolution in the Fourier domain, enabling efficient modeling of long-range dependencies. By leveraging spectral representations, FNO demonstrated strong performance on benchmark PDE datasets such as Navier–Stokes and Darcy flow.
 
-DiffSBDD builds on these ideas by combining symmetry-aware modeling with a diffusion process<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a><a href="#ref-2" title="Satorras et al. (2021) E(n) Equivariant Graph Neural Networks">[2]</a>. Rather than generating molecules step by step, it starts with noisy data and gradually refines it into a valid molecule—one that makes sense both chemically and spatially. The model can “see” the protein pocket and generate a geometrically and chemically plausible ligand that conforms to the binding pocket topology.
+However, FNO assumes structured grids and periodic boundary conditions. When applied to irregular or complex geometries—common in real-world engineering scenarios—its performance degrades significantly<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>.
 
-This transition from rigid libraries to generative spatial modeling sets the stage for DiffSBDD’s core innovations. What follows is a closer look at how equivariant diffusion is reshaping the landscape of molecular generation.
+Graph Neural Operators (GNO)
+
+To handle irregular domains, Graph Neural Operators (GNO) were introduced<a href="#ref-3" title="Li et al. (2020) Graph Neural Operator">[3]</a>. GNO models treat mesh points as graph nodes and propagate information through learned graph kernels. This allows flexibility with respect to geometry.
+
+While effective for local interactions, graph-based methods often struggle to efficiently capture global correlations across large domains. The receptive field typically grows with depth, and modeling long-range dependencies can require many message-passing layers.
+
+Transformer-Based Neural Operators
+
+Transformers offer a natural solution to the long-range interaction problem through self-attention. Models such as the Galerkin Transformer<a href="#ref-4" title="Cao (2021) Fourier or Galerkin Transformer">[4]</a> and GNOT (General Neural Operator Transformer)<a href="#ref-5" title="Hao et al. (2023) GNOT">[5]</a> applied attention mechanisms directly to mesh points.
+
+The appeal is clear:
+
+Attention captures global correlations in a single layer.
+It can be interpreted as a learnable integral operator.
+It aligns naturally with operator learning theory.
+
+However, a major computational bottleneck arises.
+
+The Quadratic Attention Problem
+
+Standard self-attention computes pairwise interactions between all input tokens: Complexity = O(N^2) where N is the number of mesh points.
+
+In scientific computing tasks, N is often in the range of thousands to tens of thousands. For industrial-scale simulations such as airfoil aerodynamics or 3D car geometries, meshes can contain over 30,000 nodes<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>. Quadratic attention in this regime becomes prohibitively expensive in both memory and runtime.
+
+Several works attempted to mitigate this through linear attention approximations or factorization techniques. While these methods reduce computational complexity, they still operate at the mesh-point level, meaning they treat discretization samples as fundamental modeling units.
+
+This introduces two conceptual limitations:
+
+Mesh Dependency – Models may struggle to generalize across varying resolutions or mesh topologies.
+Physical Abstraction Gap – Mesh points are discretization artifacts; they do not directly correspond to intrinsic physical states.
 
 ## The DiffSBDD Approach – Technical Deep Dive {#the-diffsbbd-approach}
 
