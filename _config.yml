@@ -4,8 +4,8 @@ site_theme               : "default"
 title                    : "Transolver"
 title_separator          : "-"
 name                     : "Prasoon Tiwari"
-url                      : "https://yaman3397.github.io"
-baseurl                  : "/yamandeep.github.io"
+url                      : "https://prasoon-millennial.github.io"
+baseurl                  : ""
 repository               : "Prasoon-millennial/prasoon.github.io"
 
 # Author
