@@ -1,7 +1,7 @@
 # Basic Site Settings
 locale                   : "en-US"
 site_theme               : "default"
-title                    : "Trans Solver"
+title                    : "Transolver"
 title_separator          : "-"
 name                     : "Prasoon Tiwari"
 url                      : "https://yaman3397.github.io"
