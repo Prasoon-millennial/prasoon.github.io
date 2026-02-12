@@ -155,7 +155,7 @@ $$
 
 Transolver instead introduces an intermediate abstraction layer.
 
-### Physics-Attention Mechanism
+### 2. Physics-Attention Mechanism
 
 The key innovation of Transolver is replacing point-level self-attention with **Physics-Attention**, a mechanism that operates over learned latent physical states rather than raw mesh points<a href="#ref-1">[1]</a>.
 
@@ -169,7 +169,7 @@ These slices serve as compact representations of intrinsic physical states.
 
 ---
 
-#### 1. Slice Assignment
+### 1. Slice Assignment
 
 Each mesh feature $x_i \in \mathbb{R}^{C}$ is softly assigned to slices through a learnable projection:
 
@@ -187,7 +187,7 @@ The softmax ensures each mesh point contributes proportionally to multiple slice
 
 ---
 
-#### 2. Slice Token Construction
+### 2. Slice Token Construction
 
 Slice tokens are formed through weighted aggregation:
 
@@ -206,7 +206,7 @@ This transformation yields two critical benefits:
 
 ---
 
-#### 3. Attention in Slice Space
+### 3. Attention in Slice Space
 
 Self-attention is then computed over slice tokens instead of mesh points:
 
@@ -239,7 +239,7 @@ This eliminates the quadratic bottleneck of standard self-attention<a href="#ref
 
 ---
 
-#### 4. Deslicing (Projection Back to Mesh)
+### 4. Deslicing (Projection Back to Mesh)
 
 After slice-level interactions are computed, updated physical states are broadcast back to mesh points using the same assignment weights:
 
