@@ -10,7 +10,7 @@ repository               : "Prasoon-millennial/prasoon.github.io"
 
 # Author
 author:
-  avatar           : "/prasoon.github.io/prasoon.github.io/images/profile.png"
+  avatar           : "https://prasoon-millennial.github.io/prasoon.github.io/images/profile.png"
   name             : "Prasoon Tiwari"
   bio              : "M.Sc. Computer Science"
   location         : "Stuttgart, Germany"
