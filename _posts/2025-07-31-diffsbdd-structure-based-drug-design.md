@@ -77,19 +77,19 @@ g represents the discretized geometry or spatial coordinates,
 u denotes input conditions (e.g., boundary or initial states), and 
 v is the resulting physical field.
 
-Fourier Neural Operator (FNO)
+### Fourier Neural Operator (FNO)
 
 One of the earliest and most influential approaches was the Fourier Neural Operator (FNO)<a href="#ref-2" title="Li et al. (2021) Fourier Neural Operator">[2]</a>. FNO performs global convolution in the Fourier domain, enabling efficient modeling of long-range dependencies. By leveraging spectral representations, FNO demonstrated strong performance on benchmark PDE datasets such as Navier–Stokes and Darcy flow.
 
 However, FNO assumes structured grids and periodic boundary conditions. When applied to irregular or complex geometries—common in real-world engineering scenarios—its performance degrades significantly<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>.
 
-Graph Neural Operators (GNO)
+### Graph Neural Operators (GNO)
 
 To handle irregular domains, Graph Neural Operators (GNO) were introduced<a href="#ref-3" title="Li et al. (2020) Graph Neural Operator">[3]</a>. GNO models treat mesh points as graph nodes and propagate information through learned graph kernels. This allows flexibility with respect to geometry.
 
 While effective for local interactions, graph-based methods often struggle to efficiently capture global correlations across large domains. The receptive field typically grows with depth, and modeling long-range dependencies can require many message-passing layers.
 
-Transformer-Based Neural Operators
+### Transformer-Based Neural Operators
 
 Transformers offer a natural solution to the long-range interaction problem through self-attention. Models such as the Galerkin Transformer<a href="#ref-4" title="Cao (2021) Fourier or Galerkin Transformer">[4]</a> and GNOT (General Neural Operator Transformer)<a href="#ref-5" title="Hao et al. (2023) GNOT">[5]</a> applied attention mechanisms directly to mesh points.
 
@@ -101,7 +101,7 @@ It aligns naturally with operator learning theory.
 
 However, a major computational bottleneck arises.
 
-The Quadratic Attention Problem
+### The Quadratic Attention Problem
 
 Standard self-attention computes pairwise interactions between all input tokens: Complexity = O(N^2) where N is the number of mesh points.
 
@@ -111,10 +111,76 @@ Several works attempted to mitigate this through linear attention approximations
 
 This introduces two conceptual limitations:
 
-Mesh Dependency – Models may struggle to generalize across varying resolutions or mesh topologies.
-Physical Abstraction Gap – Mesh points are discretization artifacts; they do not directly correspond to intrinsic physical states.
+1. Mesh Dependency – Models may struggle to generalize across varying resolutions or mesh topologies.
+2. Physical Abstraction Gap – Mesh points are discretization artifacts; they do not directly correspond to intrinsic physical states.
 
-## The DiffSBDD Approach – Technical Deep Dive {#the-diffsbbd-approach}
+## The Transolver Approach – Technical Deep Dive
+
+Transolver proposes a principled redesign of Transformer-based neural operators for PDE solving. Instead of applying attention directly to discretized mesh points, it introduces a new mechanism called Physics-Attention, built around the concept of learned slices<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>.
+
+At a high level, the model follows this pipeline:
+
+$$
+Mesh → Physics - Aware Slices → Token Attention → Mesh
+$$
+
+The key innovation lies in how the discretized domain is transformed into a compact set of intrinsic physical representations.
+
+### 1. Problem Setup
+
+Consider a PDE defined over a domain $\Omega \subset \mathbb{R}^{C_g}$.
+
+After discretization, the domain is represented by:
+
+- $N$ mesh points $g \in \mathbb{R}^{N \times C_g}$  
+- Optional observed physical quantities $u \in \mathbb{R}^{N \times C_u}$  
+
+The goal is to predict target physical fields (e.g., velocity, pressure, stress) at each mesh point.
+
+Traditional Transformer operators would embed each mesh point as a token and compute full self-attention:
+
+$$
+\text{Attention}(X) =
+\text{Softmax}\left(\frac{QK^T}{\sqrt{d}}\right)V
+$$
+
+with computational complexity:
+
+$$
+O(N^2)
+$$
+
+Transolver instead introduces an intermediate abstraction layer.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### 1. Score-Based Diffusion Sampling
 Most generative models work like painters: they build up a molecule atom by atom, starting from nothing. DiffSBDD flips this logic on its head. Instead of constructing molecules step-by-step, it starts with pure noise—a cloud of random 3D points—and sculpts that noise into a molecule using a process called diffusion sampling.
@@ -124,7 +190,6 @@ At the heart of this process is a score function, denoted as s_\theta(\mathbf{x}
 Mathematically, diffusion models simulate a reverse stochastic process. Initially, you corrupt a real molecule by adding Gaussian noise at every step. Then, you train a neural network to undo this process — denoising it one step at a time:
 
 $$
-\mathbf{x}^{(t+1)} = \mathbf{x}^{(t)} + \eta \cdot s_\theta(\mathbf{x}^{(t)}, t, C)
 $$
 
 Here, $$\eta$$ controls the step size and $$\mathbf{x}^{(t)}$$ is the molecule at timestep t.
