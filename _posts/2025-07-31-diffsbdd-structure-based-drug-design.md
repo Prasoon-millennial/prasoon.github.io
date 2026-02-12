@@ -588,7 +588,7 @@ where $N$ is the number of mesh points.
 For large-scale 3D simulations, this becomes computationally infeasible in both memory usage and runtime.
 
 <p align="center">
-  <img src="{{ '/images/6.png' | relative_url }}" width="85%">
+  <img src="/prasoon.github.io/images/6.png" width="85%">
 </p>
 
 <p align="center"><em>Figure 6: Runtime and memory scaling comparison demonstrating Transolver’s linear complexity advantage. (Source: Wu et al., 2024)</em></p>
