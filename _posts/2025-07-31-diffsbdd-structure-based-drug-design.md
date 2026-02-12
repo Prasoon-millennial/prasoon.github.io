@@ -44,8 +44,9 @@ Traditionally, PDEs are solved using numerical methods such as the Finite Elemen
 In recent years, machine learning has emerged as a promising alternative through the concept of neural operators. Instead of solving PDEs from scratch for every new configuration, neural operators aim to learn the mapping:
 
 $$
-(Geometry, Boundary Conditions) → Solution Field
+(Geometry, Boundary\ Conditions) \rightarrow Solution\ Field
 $$
+
 
 Once trained, such models can act as surrogate solvers, producing near-instant predictions. Approaches such as the Fourier Neural Operator (FNO)<a href="#ref-2" title="Li et al. (2021) Fourier Neural Operator">[2]</a> and Graph Neural Operator (GNO)<a href="#ref-3" title="Li et al. (2020) Graph Neural Operator">[3]</a> have demonstrated strong performance across several benchmark PDE tasks. Transformer-based operator models, including Galerkin Transformers<a href="#ref-4" title="Cao (2021) Fourier or Galerkin Transformer">[4]</a> and GNOT<a href="#ref-5" title="Hao et al. (2023) GNOT">[5]</a>, further extended this idea by modeling long-range interactions via attention mechanisms.
 
@@ -140,14 +141,18 @@ Traditional Transformer operators would embed each mesh point as a token and com
 
 $$
 \text{Attention}(X) =
-\text{Softmax}\left(\frac{QK^T}{\sqrt{d}}\right)V
+\text{Softmax}\left(
+\frac{QK^T}{\sqrt{d}}
+\right)V
 $$
+
 
 with computational complexity:
 
 $$
 O(N^2)
 $$
+
 
 Transolver instead introduces an intermediate abstraction layer.
 
@@ -307,9 +312,7 @@ While standard Transformers treat each discretized mesh point as an independent 
 Consider a discretized physical domain represented by $N$ mesh points.  
 Traditional attention computes interactions directly between all pairs of these points, leading to:
 
-$$
-O(N^2)
-$$
+$O(N^2)$
 
 computational complexity.
 
@@ -400,9 +403,7 @@ $$
 
 Since $M$ is fixed and much smaller than $N$, the overall complexity scales linearly:
 
-$$
-O(N)
-$$
+$O(N)$
 
 This resolves the quadratic bottleneck of standard attention<a href="#ref-1">[1]</a>.
 
