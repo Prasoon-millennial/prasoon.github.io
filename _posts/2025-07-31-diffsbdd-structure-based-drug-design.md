@@ -15,11 +15,11 @@ math: true
 
 ## Abstract
 
-Partial Differential Equations (PDEs) form the mathematical foundation of scientific computing, governing applications in fluid dynamics, structural mechanics, elasticity, and aerodynamics. While traditional numerical solvers such as finite element and finite volume methods provide high accuracy, they are computationally expensive and scale poorly for high-resolution or irregular geometries. Neural operator approaches—including the Fourier Neural Operator (FNO)<a href="#ref-2" title="Li et al. (2021) Fourier Neural Operator">[2]</a>, Graph Neural Operators (GNO)<a href="#ref-3" title="Li et al. (2020) Neural Operator: Graph Kernel Network">[3]</a>, and Transformer-based neural operators such as GNOT<a href="#ref-5" title="Hao et al. (2023) GNOT">[5]</a>—have emerged as promising surrogate models for learning mappings between geometry and physical fields. However, standard Transformer architectures suffer from quadratic attention complexity 𝑂(𝑁^2) making them impractical for large-scale unstructured meshes.
+Partial Differential Equations (PDEs) form the mathematical foundation of scientific computing, governing applications in fluid dynamics, structural mechanics, elasticity, and aerodynamics. While traditional numerical solvers such as finite element and finite volume methods provide high accuracy, they are computationally expensive and scale poorly for high-resolution or irregular geometries. Neural operator approaches,including the Fourier Neural Operator (FNO)<a href="#ref-2" title="Li et al. (2021) Fourier Neural Operator">[2]</a>, Graph Neural Operators (GNO)<a href="#ref-3" title="Li et al. (2020) Neural Operator: Graph Kernel Network">[3]</a>, and Transformer-based neural operators such as GNOT<a href="#ref-5" title="Hao et al. (2023) GNOT">[5]</a>,have emerged as promising surrogate models for learning mappings between geometry and physical fields. However, standard Transformer architectures suffer from quadratic attention complexity 𝑂(𝑁^2) making them impractical for large-scale unstructured meshes.
 
 Transolver addresses this limitation through a novel Physics-Attention mechanism that replaces point-level attention with learned physics-aware “slices”<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>. Instead of computing attention across all mesh points, Transolver adaptively aggregates discretized mesh points into intrinsic physical states, performs attention over compact slice tokens, and projects the learned interactions back to the full mesh. This design reduces computational complexity from quadratic to linear time 𝑂(𝑁) while preserving global physical correlations<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>. The resulting architecture can be interpreted as a learnable integral operator, connecting Transformer attention mechanisms with operator learning theory<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a><a href="#ref-4" title="Cao (2021) Fourier or Galerkin Transformer">[4]</a>.
 
-Across multiple PDE benchmarks—including Elasticity, Plasticity, Navier–Stokes, Darcy flow, Airfoil, and Pipe—Transolver achieves consistent state-of-the-art performance, reporting significant relative error reduction compared to prior neural operator baselines<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a><a href="#ref-2" title="Li et al. (2021) Fourier Neural Operator">[2]</a>. Moreover, it demonstrates strong scalability and generalization on industrial-scale simulations such as AirfRANS airfoil design<a href="#ref-6" title="Bonnet et al. (2022) AirfRANS Dataset">[6]</a> and Shape-Net Car aerodynamics, including robust out-of-distribution performance on unseen geometries<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>. By shifting attention from discretization artifacts to intrinsic physical structures, Transolver provides a scalable and geometry-general Transformer framework for scientific computing and real-time engineering simulation.
+Across multiple PDE benchmarks,including Elasticity, Plasticity, Navier–Stokes, Darcy flow, Airfoil, and Pipe,Transolver achieves consistent state-of-the-art performance, reporting significant relative error reduction compared to prior neural operator baselines<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a><a href="#ref-2" title="Li et al. (2021) Fourier Neural Operator">[2]</a>. Moreover, it demonstrates strong scalability and generalization on industrial-scale simulations such as AirfRANS airfoil design<a href="#ref-6" title="Bonnet et al. (2022) AirfRANS Dataset">[6]</a> and Shape-Net Car aerodynamics, including robust out-of-distribution performance on unseen geometries<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>. By shifting attention from discretization artifacts to intrinsic physical structures, Transolver provides a scalable and geometry-general Transformer framework for scientific computing and real-time engineering simulation.
 
 ## Table of Contents
 
@@ -38,7 +38,7 @@ Across multiple PDE benchmarks—including Elasticity, Plasticity, Navier–Stok
 
 Partial Differential Equations (PDEs) are the mathematical backbone of scientific computing. They govern fluid flow, structural deformation, heat transfer, electromagnetism, and many other physical systems that underpin modern engineering and physics. From predicting airflow around aircraft wings to simulating stress distribution in automotive components, solving PDEs accurately and efficiently is essential for design, optimization, and safety analysis.
 
-Traditionally, PDEs are solved using numerical methods such as the Finite Element Method (FEM), Finite Volume Method (FVM), or spectral solvers. While these approaches are highly accurate, they are computationally expensive and iterative in nature. High-fidelity simulations—especially in 3D and on irregular geometries—can require hours or even days of computation. Moreover, when geometries change (e.g., during design optimization), the mesh often needs to be regenerated, further increasing computational overhead.
+Traditionally, PDEs are solved using numerical methods such as the Finite Element Method (FEM), Finite Volume Method (FVM), or spectral solvers. While these approaches are highly accurate, they are computationally expensive and iterative in nature. High-fidelity simulations,especially in 3D and on irregular geometries,can require hours or even days of computation. Moreover, when geometries change (e.g., during design optimization), the mesh often needs to be regenerated, further increasing computational overhead.
 
 In recent years, machine learning has emerged as a promising alternative through the concept of neural operators. Instead of solving PDEs from scratch for every new configuration, neural operators aim to learn the mapping:
 
@@ -51,7 +51,7 @@ Once trained, such models can act as surrogate solvers, producing near-instant p
 
 However, a fundamental limitation remains: scalability on general geometries.
 
-Standard Transformers compute attention across all pairs of input points, leading to quadratic complexity 𝑂(𝑁^2). For fine-resolution meshes containing tens of thousands of nodes—as commonly encountered in industrial-scale simulations—this quickly becomes infeasible in terms of memory and runtime<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>. Additionally, mesh points themselves are discretization artifacts; they do not directly correspond to intrinsic physical states. Treating them as independent tokens may limit generalization across different mesh resolutions and topologies.
+Standard Transformers compute attention across all pairs of input points, leading to quadratic complexity 𝑂(𝑁^2). For fine-resolution meshes containing tens of thousands of nodes,as commonly encountered in industrial-scale simulations,this quickly becomes infeasible in terms of memory and runtime<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>. Additionally, mesh points themselves are discretization artifacts; they do not directly correspond to intrinsic physical states. Treating them as independent tokens may limit generalization across different mesh resolutions and topologies.
 
 This is precisely the gap that Transolver seeks to address<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>.
 
@@ -87,7 +87,7 @@ v is the resulting physical field.
 
 One of the earliest and most influential approaches was the Fourier Neural Operator (FNO)<a href="#ref-2" title="Li et al. (2021) Fourier Neural Operator">[2]</a>. FNO performs global convolution in the Fourier domain, enabling efficient modeling of long-range dependencies. By leveraging spectral representations, FNO demonstrated strong performance on benchmark PDE datasets such as Navier–Stokes and Darcy flow.
 
-However, FNO assumes structured grids and periodic boundary conditions. When applied to irregular or complex geometries—common in real-world engineering scenarios—its performance degrades significantly<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>.
+However, FNO assumes structured grids and periodic boundary conditions. When applied to irregular or complex geometries,common in real-world engineering scenarios,its performance degrades significantly<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>.
 
 ### Graph Neural Operators (GNO)
 
@@ -172,7 +172,7 @@ Transolver instead introduces an intermediate abstraction layer.
 
 The key innovation of Transolver is replacing point-level self-attention with **Physics-Attention**, a mechanism that operates over learned latent physical states rather than raw mesh points<a href="#ref-1">[1]</a>.
 
-Mesh points are not fundamental physical entities — they are discretized samples of a continuous field. Many spatially distant points may exhibit similar physical behavior (e.g., comparable stress magnitude or flow characteristics). Instead of attending over all $N$ mesh points directly, Transolver introduces $M$ learnable **slices**, where:
+Mesh points are not fundamental physical entities , they are discretized samples of a continuous field. Many spatially distant points may exhibit similar physical behavior (e.g., comparable stress magnitude or flow characteristics). Instead of attending over all $N$ mesh points directly, Transolver introduces $M$ learnable **slices**, where:
 
 $$
 M \ll N
@@ -435,10 +435,10 @@ This ensures scale-invariant evaluation across different physical magnitudes.
 
 The Transolver architecture exhibits several key properties:
 
-- **Geometry-General** — Works on structured grids, point clouds, and unstructured meshes.  
-- **Resolution-Agnostic** — Slice abstraction reduces dependence on mesh density.  
-- **Scalable** — Linear complexity with respect to mesh size.  
-- **Physically Motivated** — Attention approximates integral operators in latent physical space<a href="#ref-1">[1]</a>.  
+- **Geometry-General** , Works on structured grids, point clouds, and unstructured meshes.  
+- **Resolution-Agnostic** , Slice abstraction reduces dependence on mesh density.  
+- **Scalable** , Linear complexity with respect to mesh size.  
+- **Physically Motivated** , Attention approximates integral operators in latent physical space<a href="#ref-1">[1]</a>.  
 
 By preserving the Transformer backbone while redesigning attention, Transolver achieves a balance between theoretical grounding and practical scalability.
 
@@ -680,7 +680,7 @@ $$
 
 Transolver makes near real-time surrogate simulation feasible<a href="#ref-1">[1]</a>.
 
-This is not merely an optimization improvement — it is an architectural redesign that shifts Transformer-based PDE solving from theoretical feasibility to practical deployability.
+This is not merely an optimization improvement , it is an architectural redesign that shifts Transformer-based PDE solving from theoretical feasibility to practical deployability.
 
 ## Critical Analysis
 
@@ -727,7 +727,7 @@ Physics-Attention is interpretable as a learnable integral operator approximatio
 **1. Supervised Training Requirement**
 
 Transolver relies on large datasets generated by high-fidelity numerical solvers.  
-This means it does not eliminate the need for classical solvers — it accelerates them after training.
+This means it does not eliminate the need for classical solvers , it accelerates them after training.
 
 ---
 
@@ -827,7 +827,7 @@ By shifting attention from mesh points to intrinsic physical states, Transolver 
 
 Transolver introduces a novel Physics-Attention mechanism that fundamentally redesigns how Transformer architectures operate on discretized physical domains<a href="#ref-1">[1]</a>.
 
-Instead of computing attention directly over mesh points — which results in quadratic complexity — the model learns compact, physics-aware slice tokens and performs attention in a compressed latent space.
+Instead of computing attention directly over mesh points , which results in quadratic complexity , the model learns compact, physics-aware slice tokens and performs attention in a compressed latent space.
 
 This reduces computational complexity from:
 
@@ -854,7 +854,7 @@ By bridging operator learning theory with efficient Transformer design, Transolv
 
 The work highlights an important insight:
 
-Modeling intrinsic physical structure — rather than discretization artifacts — is key to scalable deep learning for scientific computing.
+Modeling intrinsic physical structure , rather than discretization artifacts , is key to scalable deep learning for scientific computing.
 
 <a id="ref-1"></a>
 <a id="ref-2"></a>
