@@ -55,6 +55,13 @@ Standard Transformers compute attention across all pairs of input points, leadin
 
 This is precisely the gap that Transolver seeks to address<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>.
 
+<p align="center">
+  <img src="/images/1.png" width="85%">
+</p>
+
+<p align="center"><em>Figure 1: Visualization of learned physics-aware slices across different geometries (Darcy, Elasticity, Airfoil, and Car tasks). Brighter colors indicate stronger slice assignments. (Source: Wu et al., 2024)</em></p>
+
+
 The key motivation behind Transolver is a conceptual shift: Instead of attending over mesh points, attend over physical structures.
 
 By introducing a Physics-Attention mechanism built around learned “slices,” Transolver replaces point-level attention with interactions between compact, physics-aware tokens. This reduces computational complexity from quadratic to linear time 𝑂(𝑁) while preserving the ability to model global physical correlations<a href="#ref-1" title="Wu et al. (2024) Transolver">[1]</a>. Importantly, this design allows the model to scale to large unstructured meshes without sacrificing accuracy.
@@ -122,6 +129,12 @@ At a high level, the model follows this pipeline:
 $$
 Mesh → Physics - Aware Slices → Token Attention → Mesh
 $$
+
+<p align="center">
+  <img src="/images/2.png" width="80%">
+</p>
+
+<p align="center"><em>Figure 2: Conceptual illustration of mapping from discretized mesh space to physics-aware slice space. (Source: Wu et al., 2024)</em></p>
 
 The key innovation lies in how the discretized domain is transformed into a compact set of intrinsic physical representations.
 
@@ -301,6 +314,13 @@ This seemingly small architectural change produces:
 
 ## Architecture Overview
 
+<p align="center">
+  <img src="/images/3.png" width="85%">
+</p>
+
+<p align="center"><em>Figure 3: Architecture of Transolver with stacked Physics-Attention layers replacing standard self-attention. (Source: Wu et al., 2024)</em></p>
+
+
 Transolver retains the high-level structure of a Transformer encoder, but replaces standard self-attention with the proposed Physics-Attention mechanism<a href="#ref-1">[1]</a>. 
 
 At a system level, the architecture can be summarized as:
@@ -462,6 +482,13 @@ These datasets include structured grids, point clouds, and irregular meshes, tes
 
 Across these tasks, Transolver achieves consistent state-of-the-art performance, reporting up to **22% relative error reduction** compared to prior neural operators<a href="#ref-1">[1]</a>.
 
+<p align="center">
+  <img src="/images/t2.png" width="95%">
+</p>
+
+<p align="center"><em>Table 2: Relative L2 error comparison across six PDE benchmarks. Transolver achieves the best performance in most settings. (Source: Wu et al., 2024)</em></p>
+
+
 Notably:
 
 - On fluid dynamics tasks (Navier–Stokes, Airfoil), the model captures long-range flow interactions effectively.
@@ -473,6 +500,12 @@ Notably:
 ### Industrial-Scale Simulations
 
 Beyond synthetic benchmarks, Transolver is tested on large-scale industrial datasets.
+
+<p align="center">
+  <img src="/images/4.png" width="85%">
+</p>
+
+<p align="center"><em>Figure 4: Industrial aerodynamic simulation setups including 3D car surface prediction and airfoil design tasks. (Source: Wu et al., 2024)</em></p>
 
 ### Shape-Net Car (3D Aerodynamics)
 
@@ -496,7 +529,14 @@ Tasks include:
 
 - Predicting pressure distribution  
 - Estimating velocity fields  
-- Computing derived quantities such as lift and drag  
+- Computing derived quantities such as lift and drag
+
+<p align="center">
+  <img src="/images/t3.png" width="95%">
+</p>
+
+<p align="center"><em>Table 3: Performance comparison on Shape-Net Car and AirfRANS datasets, including surface error and aerodynamic metrics. (Source: Wu et al., 2024)</em></p>
+
 
 Results show:
 
@@ -546,6 +586,13 @@ $$
 where $N$ is the number of mesh points.
 
 For large-scale 3D simulations, this becomes computationally infeasible in both memory usage and runtime.
+
+<p align="center">
+  <img src="/images/6.png" width="85%">
+</p>
+
+<p align="center"><em>Figure 6: Runtime and memory scaling comparison demonstrating Transolver’s linear complexity advantage. (Source: Wu et al., 2024)</em></p>
+
 
 ---
 
