@@ -486,7 +486,7 @@ Across these tasks, Transolver achieves consistent state-of-the-art performance,
   <img src="/prasoon.github.io/images/t2.png" width="85%">
 </p>
 
-<p align="center"><em>Table 2: Relative L2 error comparison across six PDE benchmarks. Transolver achieves the best performance in most settings. (Source: Wu et al., 2024)</em></p>
+<p align="center"><em>Table 1: Relative L2 error comparison across six PDE benchmarks. Transolver achieves the best performance in most settings. (Source: Wu et al., 2024)</em></p>
 
 
 Notably:
@@ -535,7 +535,7 @@ Tasks include:
   <img src="/prasoon.github.io/images/t3.png" width="85%">
 </p>
 
-<p align="center"><em>Table 3: Performance comparison on Shape-Net Car and AirfRANS datasets, including surface error and aerodynamic metrics. (Source: Wu et al., 2024)</em></p>
+<p align="center"><em>Table 2: Performance comparison on Shape-Net Car and AirfRANS datasets, including surface error and aerodynamic metrics. (Source: Wu et al., 2024)</em></p>
 
 
 Results show:
@@ -591,7 +591,7 @@ For large-scale 3D simulations, this becomes computationally infeasible in both 
   <img src="/prasoon.github.io/images/6.png" width="85%">
 </p>
 
-<p align="center"><em>Figure 6: Runtime and memory scaling comparison demonstrating Transolver’s linear complexity advantage. (Source: Wu et al., 2024)</em></p>
+<p align="center"><em>Figure 5: Runtime and memory scaling comparison demonstrating Transolver’s linear complexity advantage. (Source: Wu et al., 2024)</em></p>
 
 
 ---
