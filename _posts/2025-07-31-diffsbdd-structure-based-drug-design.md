@@ -272,351 +272,660 @@ This seemingly small architectural change produces:
 - Geometry generality  
 - Strong empirical performance across structured and unstructured meshes<a href="#ref-1">[1]</a>
 
+## Physics-Attention and the Slice Mechanism
 
+The defining innovation of Transolver is the replacement of point-level attention with **Physics-Attention**, a mechanism that operates over learned slice tokens rather than raw mesh points<a href="#ref-1">[1]</a>.
 
+While standard Transformers treat each discretized mesh point as an independent token, Transolver introduces an intermediate abstraction layer that captures *intrinsic physical structure* before global interactions are computed.
 
+---
 
+### From Mesh Space to Physics Space
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-### 1. Score-Based Diffusion Sampling
-Most generative models work like painters: they build up a molecule atom by atom, starting from nothing. DiffSBDD flips this logic on its head. Instead of constructing molecules step-by-step, it starts with pure noise—a cloud of random 3D points—and sculpts that noise into a molecule using a process called diffusion sampling.
-
-At the heart of this process is a score function, denoted as s_\theta(\mathbf{x}_t, t, C). This function doesn’t generate molecules directly; instead, it predicts the direction in which the current noisy structure should move to become more like a valid ligand—one that fits well into the given protein pocket C.
-
-Mathematically, diffusion models simulate a reverse stochastic process. Initially, you corrupt a real molecule by adding Gaussian noise at every step. Then, you train a neural network to undo this process — denoising it one step at a time:
+Consider a discretized physical domain represented by $N$ mesh points.  
+Traditional attention computes interactions directly between all pairs of these points, leading to:
 
 $$
+O(N^2)
 $$
 
-Here, $$\eta$$ controls the step size and $$\mathbf{x}^{(t)}$$ is the molecule at timestep t.
+computational complexity.
 
-But unlike images or text, molecules live in 3D space, and small coordinate changes can drastically change chemical meaning. So instead of generic networks, DiffSBDD uses SE(3)-equivariant score models<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a><a href="#ref-2" title="Satorras et al. (2021) E(n) Equivariant Graph Neural Networks">[2]</a> — we’ll explain what that means later. For now, what matters is this: every denoising step is aware of the protein’s shape and chemistry, and nudges the molecule toward better shape, fit, and chemical plausibility.
+However, mesh points are merely samples of a continuous physical field. Many points may share similar physical behavior even if they are spatially distant.
 
-This sampling loop is flexible: you can let it run from pure noise (to generate a new molecule from scratch) or partially mask a molecule and only fill in the rest (for fragment linking or scaffold hopping).
-
-> Think of it like a sculptor refining a rough block into a statue — except the sculptor has full awareness of the target shape (the protein pocket), and the statue gradually emerges through hundreds of symmetry-aware denoising steps.
-
-![Figure 1: Workflow of DiffSBDD from protein pocket input to 3D ligand generation via equivariant diffusion.]({{ site.baseurl }}/images/fig1.png)
-*Figure 1: Workflow of DiffSBDD from protein pocket input to 3D ligand generation via equivariant diffusion.*
-
-# Score-based denoising loop
-```python
-def sample_ligand_from_noise(model, steps, eta, protein_context):
-    x_t = initialize_gaussian_noise()
-    for t in reversed(range(steps)):
-        score = model.predict_score(x_t, t, protein_context)
-        x_t = x_t + eta * score
-    return x_t
-```
-### 2. Graph Modeling with Spatial Priors 
-
-In molecule generation, understanding what atoms are present is only part of the story. What really matters is where they are in 3D space and how they interact with each other—and with the protein they’re meant to bind. That’s why DiffSBDD uses something called a **spatial graph**, which is rebuilt at every step of the generation process.
-
-Let’s start with the ligand. Each atom is treated as a point in space, along with its element type. The model connects atoms into a graph by looking at how close they are—if two atoms are within a certain distance (usually around 4 to 6 angstroms), they get linked by an edge. This approach goes beyond just chemical bonds: it also captures things like van der Waals forces or steric repulsion.
-
-Mathematically, a ligand atom is represented by:
+Transolver therefore introduces $M$ learned **slices**, where:
 
 $$
-(\mathbf{r}_i, z_i)
+M \ll N
 $$
 
-where $$(\mathbf{r}_i)$$ is its 3D coordinate and $$(z_i )$$ is the atomic type. If atom $$(i)$$ and $$(j)$$ are close enough, meaning:
+These slices act as latent physical states.
+
+---
+
+### Slice Assignment Mechanism
+
+Each mesh point feature $x_i \in \mathbb{R}^{C}$ is projected into slice weights:
 
 $$
-\| \mathbf{r}_i - \mathbf{r}_j \| < d_{\text{cutoff}},
+w_i = \text{Softmax}(W_s x_i)
 $$
 
-then they’re considered neighbors in the graph.
+where:
 
-Now, the protein pocket is treated differently. It’s processed just once, before generation begins, into its own graph with fixed nodes and features—like atom type, residue identity, orientation vectors, and pairwise distances. That graph stays constant while the ligand is being generated<a href="#ref-7" title="Berman et al. (2000) Protein Data Bank">[7]</a>.
+- $W_s$ is a learnable projection matrix  
+- $w_i \in \mathbb{R}^{M}$  
+- $\sum_{j=1}^{M} w_{i,j} = 1$
 
-The interesting part is what happens **between** the ligand and protein. At each step, DiffSBDD forms temporary connections between the current ligand atoms and nearby atoms in the pocket. These are not hard-coded bonds—they’re just “soft” edges that let information flow from the protein into the ligand. It’s like the ligand is constantly checking, “Am I getting too close to the wall? Am I in the right spot to form a hydrogen bond?”<a href="#ref-7" title="Berman et al. (2000) Protein Data Bank">[7]</a>
+These weights softly assign each mesh point to multiple slices.
 
-This results in a hybrid graph that changes at every timestep. As the ligand atoms move around, the edges are recalculated. It’s a dynamic process, and the model uses it to pass messages between atoms. The messages depend not just on the atom types but also their distances and relative positions. A simplified version of the message function looks like:<a href="#ref-2" title="Satorras et al. (2021) E(n) Equivariant Graph Neural Networks">[2]</a>
+This soft assignment is crucial:
 
-$$
-\mathbf{m}_{ij} = \phi(z_i, z_j, \| \mathbf{r}_i - \mathbf{r}_j \|, t)
-$$
+- It avoids hard clustering.
+- It allows continuous adaptation during training.
+- It enables physically coherent grouping.
 
-This message is then used to update the atom's internal state as the molecule continues to form.
+---
 
-> In short, the graph isn’t just a data structure—it’s the way the model “feels” the molecule forming in space. It constantly adapts, helping the model make smarter decisions about where atoms should go next.
+### Constructing Physics-Aware Tokens
 
-![Figure 2: Representation of ligand and protein as spatial graphs used in DiffSBDD.]({{ site.baseurl }}/images/fig2.png)
-*Figure 2: Representation of ligand and protein as spatial graphs used in DiffSBDD.*
-
-### 3. Conditional Generation and Inpainting
-
-In drug discovery, we’re often not building molecules from scratch. Chemists might already have a fragment that binds well, a scaffold they want to preserve, or a specific substructure with known bioactivity. What they need is a way to complete or refine that structure—without losing what already works.
-
-DiffSBDD handles this through **inpainting**, a technique that lets the model focus on generating only the missing parts of a molecule. During sampling, the input ligand is partially masked: some atoms are fixed in place (the known fragment), and others are marked as “missing” and treated as noise. The model then denoises only the masked atoms, while keeping the rest untouched.
-
-Formally, we define a mask $$( M \in \{0, 1\}^n )$$, where $$( M_i = 1 )$$ if atom $$( i )$$ is masked and should be generated, and $$( M_i = 0 )$$ if it should be clamped. At each timestep $$( t )$$, the denoising update is applied only to the masked subset:
+Each slice token is formed through weighted aggregation:
 
 $$
-\mathbf{x}^{(t+1)}_i =
-\begin{cases}
-\mathbf{x}^{(t)}_i + \eta \cdot s_\theta(\mathbf{x}^{(t)}, t, C)_i & \text{if } M_i = 1 \\
-\mathbf{x}^{(t)}_i & \text{if } M_i = 0
-\end{cases}
+z_j =
+\frac{\sum_{i=1}^{N} w_{i,j} x_i}
+{\sum_{i=1}^{N} w_{i,j}}
 $$
 
-This makes the generation process highly controllable. You can ask the model to link two fragments, replace a central scaffold while preserving the binding groups, or decorate a known core with synthetically accessible functional groups—all using the same architecture<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a>.
+Each $z_j$ now represents a learned physical region of the domain.
 
-The inpainting mechanism also supports conditional tasks like:
+Importantly:
 
-- **Fragment linking** – connecting two small fragments bound in nearby sites
-- **Scaffold decoration** – adding R-groups to a fixed core
-    - **Property-conditioned sampling** – filling in missing atoms while optimizing for drug-likeness or selectivity<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a><a href="#ref-4" title="Lu et al. (2021) Pocket2Mol">[4]</a>
+- Spatially distant but physically similar points can contribute to the same slice.
+- The representation becomes resolution-agnostic.
+- The token dimension reduces from $N$ to $M$.
 
-> In a way, it’s like giving the model a puzzle with a few pieces already in place. Instead of starting from scratch, it learns to complete the picture while keeping the existing pieces exactly where they are.
-
-![Figure 3: Conditional generation using inpainting in DiffSBDD.]({{ site.baseurl }}/images/fig3.png)
-*Figure 3: The model masks known fragments (blue) and denoises only the unknown regions (gray → green) while conditioning on the protein context. This allows controlled generation for tasks like scaffold hopping, fragment linking, and R-group decoration.*
-
-```python
-def inpainting_denoise_step(x_t, mask, model, t, context):
-    score = model.predict_score(x_t, t, context)
-    x_next = x_t.clone()
-    x_next[mask] = x_t[mask] + eta * score[mask]
-    return x_next
-```
-
-### 4. Property Optimization via Iterative Feedback 
-
-Once you’ve got a decent molecule, the next question is: can we make it better? In real-world drug discovery, optimizing a candidate’s properties—like drug-likeness, selectivity, or solubility—is often just as important as getting it to bind. DiffSBDD handles this through a feedback-driven loop that combines denoising with scoring.
-
-The process starts with a ligand that already fits the pocket. We introduce a bit of noise, just like in the normal diffusion process, and then denoise it again. But this time, we don’t just accept the output blindly—we pass it through a **scoring function or oracle**, which evaluates properties like:
-
-- Binding affinity
-- Lipophilicity (logP)
-- Synthetic accessibility
-- Off-target risk
-- Selectivity
-
-These scores are then used to **rank the generated molecules**, and only the best-performing ones are passed to the next round. Over several iterations, this loop gradually improves the desired properties while keeping the molecule chemically and spatially valid.
-
-Mathematically, this resembles a form of guided sampling. Let \( S(x) \) be the scoring function. Then, the probability of accepting a denoised sample is proportional to:
+This transformation effectively maps:
 
 $$
-P(x) \propto \exp(\alpha \cdot S(x))
+\text{Mesh Space} \rightarrow \text{Physics Space}
 $$
 
-where $$( \alpha )$$ controls how strongly the score biases the sampling process. This framework is similar in spirit to reinforcement learning, where the score acts like a reward signal guiding exploration.
+---
 
-> You can think of it like molecular evolution under pressure—each round produces candidates, scores them, and promotes only the best. The model learns to “listen” to the feedback and evolve molecules that better satisfy the task.
+### Attention in the Slice Domain
 
-![Figure 4: Property optimization in DiffSBDD using oracle feedback and iterative refinement.]({{ site.baseurl }}/images/fig4.png)
-*Figure 4: Property optimization in DiffSBDD using oracle feedback and iterative refinement. Molecules are iteratively denoised, scored, and re-sampled to optimize drug-like properties.*
+Self-attention is then computed over slice tokens:
 
-```python
-def optimize_property(model, oracle, steps, eta, protein_context):
-    x_t = initialize_ligand()
-    for _ in range(steps):
-        x_t = add_noise(x_t)
-        score = model.predict_score(x_t, t=None, context=protein_context)
-        x_t = x_t + eta * score
-        if oracle(x_t) < threshold:
-            continue  # discard poor candidates
-    return x_t
-```
+$$
+Z' =
+\text{Softmax}\left(
+\frac{QK^T}{\sqrt{C}}
+\right)V
+$$
 
-### 5. Reflection Sensitivity and Stereochemistry 
+where:
 
-Molecules in the real world aren’t just abstract graphs—they have shape, handedness, and direction. This becomes crucial when dealing with **chiral compounds**, where two molecules can be mirror images of each other (enantiomers) but have drastically different biological effects. For example, one enantiomer might bind tightly to a protein and have therapeutic effects, while its mirror version is ineffective—or worse, toxic.
+$$
+Q, K, V \in \mathbb{R}^{M \times C}
+$$
 
-Many generative models ignore this by focusing only on rotational or translational equivariance (SO(3)), assuming mirror flips are irrelevant. But in chemistry, **reflection matters**. DiffSBDD goes a step further by being **sensitive to reflections**, operating under the full SE(3) group rather than just SO(3). This means the model learns not just that rotated versions of molecules are equivalent, but also that **reflected versions may not be**.
+The computational complexity becomes:
 
-This property is baked into the neural network architecture. When the model sees a chiral center, it can treat one configuration as chemically distinct from its mirror. This enables more biologically accurate generation, especially for tasks like scaffold hopping or fragment inpainting where chirality can’t be ignored<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a>.
+$$
+O(NMC + M^2C)
+$$
 
-Mathematically, the difference lies in the symmetry group:
+Since $M$ is fixed and much smaller than $N$, the overall complexity scales linearly:
 
-- **SO(3)** models treat all rotations as equivalent but ignore reflection (i.e., flipping left- and right-handed structures).
-- **SE(3)** models preserve reflection sensitivity:  
-  $$ f(R \cdot x) = R \cdot f(x), \quad f(P \cdot x) \neq P \cdot f(x) $$  
-  where \( R \) is a rotation matrix and \( P \) is a reflection matrix.
+$$
+O(N)
+$$
 
-> In simple terms, DiffSBDD respects the difference between your left hand and your right hand — something most models gloss over.
+This resolves the quadratic bottleneck of standard attention<a href="#ref-1">[1]</a>.
 
-![Figure 5: Reflection sensitivity in DiffSBDD allows the model to distinguish stereoisomers.]({{ site.baseurl }}/images/fig5.png)
-*Figure 5: Reflection sensitivity in DiffSBDD allows the model to distinguish stereoisomers such as R- and S-citalopram, which can have drastically different pharmacological properties.*
+---
 
-### 6. Unified Model Architecture
+### Deslicing: Mapping Back to the Mesh
 
-One of the most impressive aspects of DiffSBDD is how it brings everything together into a single, unified model. Instead of needing one model for generation, another for property optimization, and yet another for scaffold hopping, DiffSBDD handles all of these tasks with the same architecture.
+After slice-level interactions are computed, the updated tokens are projected back to mesh points using the same assignment weights:
 
-At its core, the model consists of an **SE(3)-equivariant graph neural network** that processes both ligand and protein features<a href="#ref-2" title="Satorras et al. (2021) E(n) Equivariant Graph Neural Networks">[2]</a>. The ligand atoms evolve over time via diffusion steps, while the protein pocket provides fixed contextual guidance through cross-attention layers. This design ensures that the model understands not just local atomic relationships, but also global geometry and pharmacophoric constraints.
+$$
+x_i' =
+\sum_{j=1}^{M}
+w_{i,j} z_j'
+$$
 
-The architecture is modular but tightly integrated. Here's how it works:
+Thus, each mesh point receives information from globally updated physical states.
 
-- **Input Layer**: Embeds ligand atoms (dynamic) and protein atoms (static) with chemical and spatial features.
-    - **Edge Construction**: Builds intra-ligand and ligand–protein graphs based on spatial cutoffs<a href="#ref-2" title="Satorras et al. (2021) E(n) Equivariant Graph Neural Networks">[2]</a>.
-    - **Message Passing**: Equivariant layers propagate features across the graph with respect to SE(3) transformations<a href="#ref-2" title="Satorras et al. (2021) E(n) Equivariant Graph Neural Networks">[2]</a>.
-- **Cross-Attention**: Ligand nodes query the protein graph to receive target-specific context.
-- **Score Prediction Head**: Predicts the denoising direction (gradient of log-density) for each ligand atom at each diffusion step.
+This completes one Physics-Attention layer.
 
-During training, the model learns to predict the correct score field based on noisy inputs and protein pocket context. During inference, the same model can be guided toward different tasks simply by changing the masking pattern or adding property-based oracle feedback.
+---
 
-> In practice, this means that a single DiffSBDD model can be used for designing new ligands, optimizing old ones, or even linking fragments — just by tweaking the input format.
+### Why the Slice Mechanism Matters
 
-![Figure 6: The full DiffSBDD architecture showing input processing, message passing, and score prediction for ligand generation.]({{ site.baseurl }}/images/fig6.png)
-*Figure 6: The full DiffSBDD architecture showing input processing, message passing, and score prediction for ligand generation.*
+The slice abstraction provides three major benefits:
 
-## Revolutionary Applications
+1. **Scalability** — Reduces attention complexity from $O(N^2)$ to $O(N)$.
+2. **Physical Coherence** — Groups points by behavior rather than spatial proximity.
+3. **Resolution Generalization** — Enables robustness across varying mesh densities.
 
-Beyond theoretical appeal, the DiffSBDD framework has demonstrated practical capabilities across a broad set of drug design scenarios that typically require dedicated tools. The model’s unified architecture, paired with its conditional generation and inpainting features, allows it to flexibly adapt to different application domains without retraining<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a><a href="#ref-4" title="Lu et al. (2021) Pocket2Mol">[4]</a>.
+Rather than modeling interactions between discretization artifacts, Transolver models interactions between learned physical states.
 
-Figure 8 showcases several inpainting-based applications made possible by DiffSBDD:
+This conceptual shift — from mesh-level attention to physics-level attention — is what enables Transolver to scale to large unstructured geometries while maintaining strong predictive accuracy<a href="#ref-1">[1]</a>.
 
-- **(A) Scaffold Hopping**: Replace the central core of a molecule while preserving key functional groups that engage in critical binding interactions.
-- **(B) Scaffold Elaboration**: Add novel substituents to existing molecular cores to enhance affinity or selectivity.
-- **(C) Fragment Merging**: Seamlessly combine two independently identified fragment binders into a single contiguous ligand.
-- **(D) Fragment Growing**: Extend a small hit compound with new chemical moieties to improve pharmacokinetics or interaction footprint.
-- **(E) Fragment Linking**: Bridge multiple fragment binders in spatial proximity using flexible or constrained linkers.
+## Architecture Overview
 
-These applications are unified under the inpainting abstraction, where known atoms are fixed and missing regions are sampled via score-based diffusion. Notably, DiffSBDD succeeds even when the input fragments originate from different crystallographic structures, demonstrating robust generalization<a href="#ref-4" title="Lu et al. (2021) Pocket2Mol">[4]</a>.
+Transolver retains the high-level structure of a Transformer encoder, but replaces standard self-attention with the proposed Physics-Attention mechanism<a href="#ref-1">[1]</a>. 
 
-Panels **(F)** and **(G)** illustrate the role of resampling. Increasing the number of diffusion resampling steps improves molecular connectivity—crucial for generating synthetically viable and bioactive compounds. This iterative refinement process shows that longer sampling allows designed atoms to harmonize better with fixed regions and pocket geometry<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a>.
+At a system level, the architecture can be summarized as:
 
-Together, these capabilities make DiffSBDD a practical, versatile tool for medicinal chemistry workflows—from early-stage hit discovery to late-stage lead optimization.
+$$
+\text{Mesh Input} \rightarrow \text{Embedding} \rightarrow 
+\text{Physics-Attention Layers} \rightarrow \text{Decoder}
+$$
 
-![Figure 7: Diverse molecular design tasks enabled by DiffSBDD’s conditional generation.]({{ site.baseurl }}/images/fig8.png)
-*Figure 7: DiffSBDD supports a variety of drug design scenarios using a unified inpainting mechanism. Tasks include scaffold hopping (A), elaboration (B), fragment merging (C), growing (D), and linking (E). Resampling studies (F–G) show that connectivity improves with more iterations.*
+The overall pipeline is designed to transform discretized geometric information into accurate physical field predictions.
+
+---
+
+### 1. Input Embedding
+
+The model takes as input:
+
+- Mesh coordinates $g \in \mathbb{R}^{N \times C_g}$
+- Optional physical parameters $u \in \mathbb{R}^{N \times C_u}$
+
+These inputs are concatenated and projected into a higher-dimensional feature space:
+
+$$
+x_0 = \text{Linear}([g, u])
+$$
+
+where:
+
+$$
+x_0 \in \mathbb{R}^{N \times C}
+$$
+
+This embedding stage maps raw geometric and physical information into a representation suitable for operator learning.
+
+---
+
+### 2. Stacked Physics-Attention Layers
+
+The core of Transolver consists of multiple stacked layers, each containing:
+
+1. Physics-Attention  
+2. Feed-forward network (MLP)  
+3. Residual connections  
+4. Layer normalization  
+
+Each layer computes:
+
+$$
+\hat{x}_l =
+\text{Physics-Attn}(\text{LayerNorm}(x_{l-1}))
++ x_{l-1}
+$$
+
+$$
+x_l =
+\text{MLP}(\text{LayerNorm}(\hat{x}_l))
++ \hat{x}_l
+$$
+
+This structure mirrors the canonical Transformer block, ensuring:
+
+- Stable training  
+- Gradient flow via residual connections  
+- Feature refinement through depth  
+
+The only architectural modification is replacing self-attention with slice-based Physics-Attention.
+
+---
+
+### 3. Decoder and Output Projection
+
+After $L$ stacked layers, the final hidden representation $x_L$ is projected to the desired physical outputs:
+
+$$
+\hat{y} = \text{Linear}(x_L)
+$$
+
+where:
+
+$$
+\hat{y} \in \mathbb{R}^{N \times C_{\text{out}}}
+$$
+
+The model predicts physical quantities at each mesh point, such as:
+
+- Velocity components  
+- Pressure fields  
+- Stress tensors  
+
+---
+
+### 4. Loss Function
+
+Training is performed using a regression objective, typically the Relative $L_2$ error:
+
+$$
+\mathcal{L} =
+\frac{\|y - \hat{y}\|_2}
+{\|y\|_2}
+$$
+
+where:
+
+- $y$ is the ground-truth solution from a numerical solver  
+- $\hat{y}$ is the model prediction  
+
+This ensures scale-invariant evaluation across different physical magnitudes.
+
+---
+
+### Architectural Characteristics
+
+The Transolver architecture exhibits several key properties:
+
+- **Geometry-General** — Works on structured grids, point clouds, and unstructured meshes.  
+- **Resolution-Agnostic** — Slice abstraction reduces dependence on mesh density.  
+- **Scalable** — Linear complexity with respect to mesh size.  
+- **Physically Motivated** — Attention approximates integral operators in latent physical space<a href="#ref-1">[1]</a>.  
+
+By preserving the Transformer backbone while redesigning attention, Transolver achieves a balance between theoretical grounding and practical scalability.
+
 
 ## Experimental Validation and Results
 
-To evaluate DiffSBDD’s real-world utility, the authors benchmarked it against several state-of-the-art molecular generative models on two major datasets: CrossDocked and Binding MOAD. These datasets represent synthetic and experimental protein-ligand complexes, respectively<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a><a href="#ref-7" title="Berman et al. (2000) Protein Data Bank">[7]</a>.
+To evaluate the effectiveness of Physics-Attention, Transolver is benchmarked against more than 20 state-of-the-art neural operator models across diverse PDE tasks<a href="#ref-1">[1]</a>. These include Fourier-based operators, graph-based operators, and Transformer-based neural operators such as FNO<a href="#ref-2">[2]</a> and GNOT<a href="#ref-5">[5]</a>.
 
-### Datasets
+Evaluation focuses on both **accuracy** and **scalability**.
 
-- **CrossDocked**: Designed to test generalization, where test proteins and ligands are held out from training. Useful for assessing binding pose recovery and diversity<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a>.
-- **Binding MOAD**: A high-quality dataset of crystal structures for real protein-ligand complexes. It evaluates biological realism and docking affinity<a href="#ref-7" title="Berman et al. (2000) Protein Data Bank">[7]</a>.
+---
 
-### Evaluation Metrics
+### Evaluation Metric
 
-Several performance dimensions were analyzed:
+Performance is primarily measured using the Relative $L_2$ Error:
 
-- **Tanimoto Similarity**: Measures structural similarity between generated ligands and reference ligands.
-- **Vina Score Difference**: Difference in docking score relative to the native ligand.
-- **QED (Quantitative Estimate of Drug-likeness)**: A metric reflecting how pharmacologically promising a molecule is<a href="#ref-6" title="Zhavoronkov et al. (2019) DDR1 Kinase Inhibitors">[6]</a>.
-- **Ring Size Distribution**: Assesses realism of generated molecular scaffolds.
-- **Enamine Similarity**: Indicates similarity to purchasable compounds from chemical catalogs.
+$$
+\text{Relative } L_2 =
+\frac{\|y - \hat{y}\|_2}
+{\|y\|_2}
+$$
 
-![Figure 8: Benchmark comparison of DiffSBDD vs. baseline models.]({{ site.baseurl }}/images/fig7.png)  
-*Figure 8: Benchmark comparison across CrossDocked (a–c) and Binding MOAD (d–f). Violin plots show Tanimoto similarity and Vina score difference (a, d). Bar charts compare ring-size frequencies (b, e). Molecular overlays (c, f) show QED and Vina scores for generated ligands.*
+where:
 
-### Key Findings
+- $y$ is the ground-truth solution generated by a high-fidelity numerical solver  
+- $\hat{y}$ is the model prediction  
 
-### Summary of Benchmark Metrics
+A lower value indicates better performance.
 
-The table below summarizes key results comparing DiffSBDD variants against other generative baselines on the CrossDocked dataset:
+---
 
-| Model           | Tanimoto Similarity ↑ | Docking Score (Vina) ↓ | QED ↑  | RMSD (Å) ↓ |
-|----------------|------------------------|-------------------------|--------|------------|
-| DiffSBDD-cond   | 0.68 ± 0.05            | -8.6                    | 0.82   | 1.9        |
-| DiffSBDD-joint  | 0.65 ± 0.06            | -8.3                    | 0.80   | 2.1        |
-| Pocket2Mol<a href="#ref-4" title="Lu et al. (2021) Pocket2Mol">[4]</a>      | 0.54 ± 0.07            | -7.6                    | 0.75   | 2.5        |
-| ResGen          | 0.48 ± 0.06            | -7.4                    | 0.70   | 2.8        |
-| DeepCL (2D)     | 0.45 ± 0.09            | -7.2                    | 0.71   | 2.9        |
+### Standard PDE Benchmarks
 
-#### 1. High-Fidelity Binding Poses
+Transolver is evaluated on six widely used benchmarks<a href="#ref-1">[1]</a>:
 
-- DiffSBDD-generated molecules exhibit high binding site complementarity.
-- Over 70% of structures achieve <2Å RMSD to native poses in CrossDocked, indicating precise 3D placement.
+- **Elasticity**
+- **Plasticity**
+- **Airfoil**
+- **Pipe**
+- **Navier–Stokes**
+- **Darcy Flow**
 
-#### 2. Improved Docking and Drug-likeness
+These datasets include structured grids, point clouds, and irregular meshes, testing the model’s geometry generality.
 
-- DiffSBDD-cond and DiffSBDD-joint outperform baselines (Pocket2Mol<a href="#ref-4" title="Lu et al. (2021) Pocket2Mol">[4]</a>, ResGen, DeepCL) in both Tanimoto similarity and docking score metrics (Figures 7a and 7d).
-- QED values are consistently higher for DiffSBDD ligands (Figures 7c and 7f), suggesting better pharmacological potential<a href="#ref-6" title="Zhavoronkov et al. (2019) DDR1 Kinase Inhibitors">[6]</a>.
+Across these tasks, Transolver achieves consistent state-of-the-art performance, reporting up to **22% relative error reduction** compared to prior neural operators<a href="#ref-1">[1]</a>.
 
-#### 3. Ring System Recovery
+Notably:
 
-- Generated molecules exhibit realistic ring-size distributions (Figures 7b and 7e), closely matching reference sets.
-- This points to improved structural diversity and chemical plausibility.
+- On fluid dynamics tasks (Navier–Stokes, Airfoil), the model captures long-range flow interactions effectively.
+- On elasticity and plasticity benchmarks, it accurately predicts stress concentration patterns.
+- Performance remains stable as mesh resolution increases.
 
-#### 4. Visual Validation
+---
 
-- Visual overlays (Figures 7c and 7f) confirm that generated ligands align well within protein pockets, maintaining key interactions and matching the steric shape of known binders.
+### Industrial-Scale Simulations
+
+Beyond synthetic benchmarks, Transolver is tested on large-scale industrial datasets.
+
+#### Shape-Net Car (3D Aerodynamics)
+
+This dataset involves predicting surface pressure and surrounding velocity fields for complex 3D car geometries with approximately 32,000 mesh points<a href="#ref-1">[1]</a>.
+
+Key observations:
+
+- Accurate surface pressure prediction  
+- Realistic wake flow structures  
+- Strong generalization to unseen car shapes  
+
+The model demonstrates robustness to highly irregular 3D meshes.
+
+---
+
+#### AirfRANS (Airfoil Design)
+
+Transolver is evaluated on the AirfRANS dataset<a href="#ref-6">[6]</a>, which approximates Reynolds-Averaged Navier–Stokes (RANS) simulations.
+
+Tasks include:
+
+- Predicting pressure distribution  
+- Estimating velocity fields  
+- Computing derived quantities such as lift and drag  
+
+Results show:
+
+- Improved accuracy compared to baseline neural operators  
+- Strong out-of-distribution (OOD) generalization  
+- Stable performance across varying Reynolds numbers and attack angles  
+
+These experiments confirm that Physics-Attention scales to realistic aerodynamic simulation scenarios.
+
+---
+
+### Qualitative Analysis
+
+Visual comparisons demonstrate that Transolver:
+
+- Preserves fine-grained flow structures  
+- Captures sharp pressure gradients  
+- Maintains coherent stress fields  
+
+Unlike some baseline models, predictions do not degrade significantly at higher mesh resolutions.
+
+---
+
+### Findings
+
+Across both benchmark and industrial datasets, Transolver demonstrates:
+
+- Consistent reduction in Relative $L_2$ error  
+- Strong generalization across geometries  
+- Stable performance under mesh refinement  
+- Practical scalability for large domains  
+
+These results validate the central hypothesis of the paper:  
+modeling interactions at the level of intrinsic physical states is both more scalable and more accurate than operating directly on discretization artifacts<a href="#ref-1">[1]</a>.
 
 
-### Optimization of Molecular Properties and Specificity
+## Efficiency and Scalability Analysis
 
-Beyond generating plausible binders, DiffSBDD is also capable of optimizing specific molecular properties in an iterative and interpretable manner. The model allows property-guided sampling by combining diffusion with an oracle scoring loop that selectively amplifies molecules with desirable features<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a><a href="#ref-6" title="Zhavoronkov et al. (2019) DDR1 Kinase Inhibitors">[6]</a>.
+The primary motivation behind Transolver is to overcome the quadratic complexity bottleneck of standard Transformer attention in PDE solving<a href="#ref-1">[1]</a>. 
 
-Figure 9 illustrates several key use cases of property optimization:
+In scientific computing, mesh sizes can easily reach tens of thousands of points. Under standard self-attention, computational cost scales as:
 
-- **(A–D)** show how different properties—QED (drug-likeness), SA (synthetic accessibility), and docking scores—can be individually improved over successive generations. Each property is optimized while keeping the molecular structure chemically valid and diverse.
-- **(E–F)** demonstrate specificity control: here, DiffSBDD successfully optimizes a ligand to favor binding to one kinase (BIKE) while reducing affinity for an off-target kinase (MPSK1). A trajectory plot shows improvement in on-target docking score and simultaneous degradation in off-target score.
-- **(G)** overlays the original and optimized molecules within both protein pockets, visually confirming that the optimized molecule adopts a more selective binding conformation.
+$$
+O(N^2)
+$$
 
-This illustrates DiffSBDD’s capacity to navigate trade-offs between affinity, selectivity, and synthesizability—crucial for real-world lead optimization tasks. The model effectively functions as a molecular policy engine, where each generation is guided by multi-objective scores, converging on candidates with favorable profiles<a href="#ref-6" title="Zhavoronkov et al. (2019) DDR1 Kinase Inhibitors">[6]</a>.
+where $N$ is the number of mesh points.
 
-![Figure 9: Property and selectivity optimization using DiffSBDD.]({{ site.baseurl }}/images/fig9.png)
-*Figure 9: DiffSBDD supports multi-objective optimization of molecules for improved drug-likeness, docking, and target specificity. Panels (A–D) show iterative improvement across QED, SA, and docking score. Panel (E) shows kinase overlay. Panel (F) shows optimization trajectory. Panel (G) visualizes specificity control in binding conformations.*
+For large-scale 3D simulations, this becomes computationally infeasible in both memory usage and runtime.
+
+---
+
+### Complexity Comparison
+
+Standard self-attention computes interactions between all pairs of tokens:
+
+$$
+\text{Attention}(X) =
+\text{Softmax}\left(
+\frac{QK^T}{\sqrt{d}}
+\right)V
+$$
+
+This requires storing and processing an $N \times N$ attention matrix.
+
+In contrast, Transolver introduces $M$ slice tokens with $M \ll N$. The complexity of Physics-Attention becomes:
+
+$$
+O(NMC + M^2C)
+$$
+
+Since $M$ is fixed and much smaller than $N$, this simplifies to:
+
+$$
+O(N)
+$$
+
+with respect to mesh size.
+
+This linear scaling fundamentally changes the feasibility of Transformer-based PDE solvers.
+
+---
+
+### Empirical Memory and Runtime Analysis
+
+The paper reports substantial improvements in:
+
+- GPU memory consumption  
+- Training runtime per epoch  
+- Inference latency  
+
+As mesh resolution increases, standard Transformer-based neural operators exhibit rapid growth in memory usage due to the quadratic attention matrix.
+
+Transolver, by contrast, maintains near-linear growth in both memory and runtime<a href="#ref-1">[1]</a>.
+
+This enables:
+
+- Training on larger meshes  
+- Deployment in industrial-scale simulations  
+- Practical use in 3D domains  
+
+---
+
+### Scalability with Mesh Refinement
+
+An important experiment evaluates performance under increasing mesh resolution.
+
+Key findings:
+
+- Relative $L_2$ error remains stable as mesh density increases.  
+- Runtime grows approximately linearly.  
+- GPU memory usage scales significantly more efficiently than quadratic attention baselines.  
+
+This confirms that the slice abstraction successfully decouples model scalability from mesh discretization size.
+
+---
+
+### Why Linear Complexity Matters
+
+In real-world engineering workflows, PDE solvers are often used in iterative design loops:
+
+- Geometry optimization  
+- Digital twin simulations  
+- Parameter sweeps  
+- Sensitivity analysis  
+
+Quadratic complexity prevents real-time interaction in such pipelines.
+
+By reducing complexity to:
+
+$$
+O(N)
+$$
+
+Transolver makes near real-time surrogate simulation feasible<a href="#ref-1">[1]</a>.
+
+This is not merely an optimization improvement — it is an architectural redesign that shifts Transformer-based PDE solving from theoretical feasibility to practical deployability.
 
 ## Critical Analysis
 
-While DiffSBDD is an exciting leap in generative drug design, a critical examination helps clarify both its unique strengths and its current limitations—crucial for evaluating real-world impact<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a>.
+While Transolver presents a compelling architectural redesign for PDE solving, a balanced evaluation requires examining both its strengths and limitations.
+
+---
 
 ### Strengths
 
-- **Unified Framework**: Unlike many pipelines that require separate models for generation, linking, and optimization, DiffSBDD handles all of them within a single architecture. This not only reduces training complexity but makes inference modular and efficient<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a>.
-- **Geometrically Grounded Generation**: The use of SE(3)-equivariant score models ensures physical consistency across 3D transformations. This is critical for modeling steric complementarity and ligand–protein docking accuracy, where orientation and spatial fit govern binding<a href="#ref-2" title="Satorras et al. (2021) E(n) Equivariant Graph Neural Networks">[2]</a>.
-- **Controllability via Inpainting**: DiffSBDD's inpainting mechanism provides flexibility to anchor known fragments while generating novel extensions—enabling real-world tasks like scaffold hopping, R-group decoration, and fragment linking without retraining<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a><a href="#ref-4" title="Lu et al. (2021) Pocket2Mol">[4]</a>.
-- **Reflection Sensitivity**: Many prior models only consider SO(3) invariance (rotations), ignoring chirality. DiffSBDD’s sensitivity to reflection enables it to distinguish stereoisomers—a crucial requirement in pharmaceutical design where enantiomers can behave drastically differently<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a>.
-- **Interpretable Optimization**: The integration of oracle-based feedback into the generation loop offers a form of iterative property tuning that is not only effective but also easy to visualize and audit—especially helpful for lead optimization tasks<a href="#ref-6" title="Zhavoronkov et al. (2019) DDR1 Kinase Inhibitors">[6]</a>.
+**1. Linear Complexity**
+
+The most significant contribution is reducing attention complexity from $O(N^2)$ to $O(N)$ with respect to mesh size<a href="#ref-1">[1]</a>.  
+This makes Transformer-based neural operators feasible for high-resolution and industrial-scale simulations.
+
+---
+
+**2. Geometry Generality**
+
+Unlike Fourier-based operators that assume structured grids<a href="#ref-2">[2]</a>, Transolver naturally handles:
+
+- Unstructured meshes  
+- Point clouds  
+- Irregular 3D geometries  
+
+This broadens its applicability to real-world engineering domains.
+
+---
+
+**3. Strong Empirical Performance**
+
+Across multiple PDE benchmarks and industrial datasets, Transolver achieves consistent improvements in Relative $L_2$ error<a href="#ref-1">[1]</a>.  
+Performance remains stable under mesh refinement and out-of-distribution conditions.
+
+---
+
+**4. Theoretical Grounding**
+
+Physics-Attention is interpretable as a learnable integral operator approximation, maintaining consistency with operator learning theory<a href="#ref-1">[1]</a><a href="#ref-4">[4]</a>.
+
+---
 
 ### Limitations
 
-- **Lack of Experimental Validation**: All current results are computational. Without wet-lab synthesis and binding assays, the model’s real-world drug development potential remains speculative<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a><a href="#ref-6" title="Zhavoronkov et al. (2019) DDR1 Kinase Inhibitors">[6]</a>.
-- **Static Protein Representation**: The current framework treats the protein pocket as rigid. This assumption may not hold in cases where induced fit or flexible loops are critical for binding, potentially limiting generalizability<a href="#ref-7" title="Berman et al. (2000) Protein Data Bank">[7]</a>.
-- **Oracle Dependence in Optimization**: While oracles enable goal-directed sampling, they can also inject bias. If the scoring functions do not fully capture biological context (e.g., off-target effects, ADMET), the model might over-optimize for flawed objectives<a href="#ref-6" title="Zhavoronkov et al. (2019) DDR1 Kinase Inhibitors">[6]</a>.
-- **Computational Cost**: Score-based diffusion and SE(3)-equivariant message passing are compute-intensive. This can make training or high-throughput generation slower compared to simpler models, limiting use in large-scale virtual screening campaigns.
+**1. Supervised Training Requirement**
 
-### Future Directions
+Transolver relies on large datasets generated by high-fidelity numerical solvers.  
+This means it does not eliminate the need for classical solvers — it accelerates them after training.
 
-- **Protein Flexibility Modeling**: Introducing dynamic or ensemble-based representations of the binding site could help model induced-fit effects and improve generalizability.
+---
 
-- **Experimental Coupling**: Downstream synthesis and bioassays will be crucial to validate predictions and calibrate oracle scores against biological ground truth.
+**2. Training Cost**
 
-- **Synthesis-Aware Generation**: Incorporating retrosynthesis constraints or training with synthesis-aware scores could prevent generation of chemically invalid or impractical molecules.
+Although inference is efficient, training remains computationally intensive due to:
 
-- **Expansion to Other Domains**: The same principles could extend to enzyme engineering, materials discovery, or even battery electrolytes, where 3D interactions matter but datasets are small—making equivariant priors even more valuable.
+- Large model size  
+- Multiple Physics-Attention layers  
+- High-dimensional feature embeddings  
+
+---
+
+**3. Interpretability of Slices**
+
+While slices are physically motivated, their learned representations are latent and difficult to interpret explicitly.  
+Understanding what physical structures each slice captures remains an open research question.
+
+---
+
+**4. Hyperparameter Sensitivity**
+
+The number of slices $M$ influences:
+
+- Computational efficiency  
+- Representation capacity  
+- Generalization performance  
+
+Selecting $M$ requires empirical tuning.
+
+---
+
+Overall, Transolver represents a strong architectural improvement, though future work is needed to improve interpretability and reduce training cost.
 
 ## Broader Impact and Future Directions
 
-DiffSBDD exemplifies how machine learning can accelerate drug discovery, reducing costs and time by exploring vast chemical space efficiently<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a><a href="#ref-6" title="Zhavoronkov et al. (2019) DDR1 Kinase Inhibitors">[6]</a>. The method paves the way for AI-driven precision medicine, improved catalysts, and advanced materials. Ethical considerations include ensuring equitable access to such technologies and careful validation to avoid biased or unsafe outputs.
+Transolver demonstrates that Transformer architectures can be redesigned to respect the structure of physical domains rather than operating directly on discretization artifacts<a href="#ref-1">[1]</a>.
 
-This framework can inspire similar applications in materials science, agrochemistry, and beyond, highlighting the growing impact of equivariant generative models in physical sciences<a href="#ref-2" title="Satorras et al. (2021) E(n) Equivariant Graph Neural Networks">[2]</a>.
+This conceptual shift opens several promising research directions.
+
+---
+
+### 1. Toward Foundation Models for PDEs
+
+One natural extension is large-scale pretraining across diverse physical systems.
+
+A sufficiently large model trained on heterogeneous PDE datasets could serve as a **foundation model for scientific computing**, analogous to large language models in NLP.
+
+Such a model could be fine-tuned for:
+
+- Fluid mechanics  
+- Structural analysis  
+- Multiphysics systems  
+- Electromagnetic simulations  
+
+---
+
+### 2. Extension to Multiphysics Problems
+
+Real-world engineering systems often involve coupled PDEs:
+
+- Fluid–structure interaction  
+- Thermo-mechanical systems  
+- Aeroelasticity  
+
+Extending Physics-Attention to multi-domain interactions is a promising avenue.
+
+---
+
+### 3. Improved Interpretability
+
+Future work may focus on analyzing learned slices to determine whether they correspond to:
+
+- Coherent flow regions  
+- Stress concentration zones  
+- Boundary-layer effects  
+
+Understanding this could bridge the gap between neural operators and traditional physical reasoning.
+
+---
+
+### 4. Real-Time Engineering Systems
+
+The linear complexity of Transolver enables practical deployment in:
+
+- Digital twins  
+- Interactive design optimization  
+- Real-time simulation feedback  
+
+This could significantly reduce computational cost in engineering pipelines.
+
+---
+
+By shifting attention from mesh points to intrinsic physical states, Transolver provides a scalable framework that aligns machine learning architectures with physical structure.
 
 ## Conclusion
 
-DiffSBDD represents a significant advance in computational drug design by combining equivariant neural architectures with diffusion probabilistic models. Its unified, physically consistent approach enables flexible generation and optimization of drug candidates directly in protein binding sites. With promising benchmark results and broad applicability, DiffSBDD charts a course for more efficient, innovative, and accurate AI-assisted molecular design<a href="#ref-1" title="Hoogeboom et al. (2024) Structure-based drug design with equivariant diffusion models">[1]</a>.
+Transolver introduces a novel Physics-Attention mechanism that fundamentally redesigns how Transformer architectures operate on discretized physical domains<a href="#ref-1">[1]</a>.
 
+Instead of computing attention directly over mesh points — which results in quadratic complexity — the model learns compact, physics-aware slice tokens and performs attention in a compressed latent space.
+
+This reduces computational complexity from:
+
+$$
+O(N^2)
+$$
+
+to:
+
+$$
+O(N)
+$$
+
+while preserving global physical correlations.
+
+Extensive experiments across benchmark and industrial-scale PDE datasets demonstrate:
+
+- Improved Relative $L_2$ accuracy  
+- Stable performance under mesh refinement  
+- Strong generalization to unseen geometries  
+- Practical scalability for large simulations  
+
+By bridging operator learning theory with efficient Transformer design, Transolver provides a meaningful step toward real-time neural PDE solvers and scalable scientific machine learning.
+
+The work highlights an important insight:
+
+Modeling intrinsic physical structure — rather than discretization artifacts — is key to scalable deep learning for scientific computing.
 
 <a id="ref-1"></a>
 <a id="ref-2"></a>
